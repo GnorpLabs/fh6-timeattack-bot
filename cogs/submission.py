@@ -60,7 +60,13 @@ class SubmissionCog(commands.Cog):
                         "Failed to download screenshot — please try again.", ephemeral=True
                     )
                     return
-                dest.write_bytes(await resp.read())
+                try:
+                    dest.write_bytes(await resp.read())
+                except OSError as exc:
+                    await interaction.followup.send(
+                        "Failed to save screenshot — please try again.", ephemeral=True
+                    )
+                    return
 
         entry_id = add_entry(
             discord_id=str(interaction.user.id),

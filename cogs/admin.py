@@ -12,6 +12,7 @@ class _ConfirmDeleteView(discord.ui.View):
     def __init__(self, entry: dict) -> None:
         super().__init__(timeout=30)
         self.entry = entry
+        self.message: discord.Message | None = None
 
     @discord.ui.button(label="Confirm Delete", style=discord.ButtonStyle.danger)
     async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
@@ -41,6 +42,8 @@ class _ConfirmDeleteView(discord.ui.View):
     async def on_timeout(self) -> None:
         for child in self.children:
             child.disabled = True
+        if self.message:
+            await self.message.edit(view=self)
 
 
 class AdminCog(commands.Cog):
@@ -71,9 +74,9 @@ class AdminCog(commands.Cog):
         embed.add_field(name="Lap Time", value=format_lap_time(entry["lap_time_ms"]), inline=True)
         embed.set_footer(text="This action cannot be undone.")
 
-        await interaction.response.send_message(
-            embed=embed, view=_ConfirmDeleteView(entry), ephemeral=True
-        )
+        view = _ConfirmDeleteView(entry)
+        await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+        view.message = await interaction.original_response()
 
 
 async def setup(bot: commands.Bot) -> None:
