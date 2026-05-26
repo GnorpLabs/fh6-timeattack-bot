@@ -12,20 +12,24 @@ def _connect() -> sqlite3.Connection:
 
 
 def init_db() -> None:
-    with _connect() as conn:
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS time_entries (
-                id               INTEGER PRIMARY KEY AUTOINCREMENT,
-                discord_id       TEXT    NOT NULL,
-                username         TEXT    NOT NULL,
-                track            TEXT    NOT NULL,
-                vehicle          TEXT    NOT NULL,
-                class            TEXT    NOT NULL,
-                lap_time_ms      INTEGER NOT NULL,
-                screenshot_path  TEXT    NOT NULL,
-                submitted_at     TEXT    NOT NULL
-            )
-        """)
+    conn = _connect()
+    try:
+        with conn:
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS time_entries (
+                    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+                    discord_id       TEXT    NOT NULL,
+                    username         TEXT    NOT NULL,
+                    track            TEXT    NOT NULL,
+                    vehicle          TEXT    NOT NULL,
+                    class            TEXT    NOT NULL,
+                    lap_time_ms      INTEGER NOT NULL,
+                    screenshot_path  TEXT    NOT NULL,
+                    submitted_at     TEXT    NOT NULL
+                )
+            """)
+    finally:
+        conn.close()
 
 
 def add_entry(
@@ -38,26 +42,34 @@ def add_entry(
     screenshot_path: str,
 ) -> int:
     submitted_at = datetime.now(timezone.utc).isoformat()
-    with _connect() as conn:
-        cur = conn.execute(
-            """INSERT INTO time_entries
-               (discord_id, username, track, vehicle, class, lap_time_ms, screenshot_path, submitted_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-            (discord_id, username, track, vehicle, class_, lap_time_ms, screenshot_path, submitted_at),
-        )
-        return cur.lastrowid
+    conn = _connect()
+    try:
+        with conn:
+            cur = conn.execute(
+                """INSERT INTO time_entries
+                   (discord_id, username, track, vehicle, class, lap_time_ms, screenshot_path, submitted_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                (discord_id, username, track, vehicle, class_, lap_time_ms, screenshot_path, submitted_at),
+            )
+            return cur.lastrowid
+    finally:
+        conn.close()
 
 
 def get_entry(entry_id: int) -> Optional[dict]:
-    with _connect() as conn:
+    conn = _connect()
+    try:
         row = conn.execute(
             "SELECT * FROM time_entries WHERE id = ?", (entry_id,)
         ).fetchone()
         return dict(row) if row else None
+    finally:
+        conn.close()
 
 
 def get_leaderboard(track: str, class_: Optional[str] = None) -> list[dict]:
-    with _connect() as conn:
+    conn = _connect()
+    try:
         if class_:
             rows = conn.execute(
                 """SELECT discord_id, username, vehicle, class,
@@ -81,14 +93,18 @@ def get_leaderboard(track: str, class_: Optional[str] = None) -> list[dict]:
                    ) best ON e.class = best.class
                              AND e.lap_time_ms = best.min_time
                              AND e.track = ?
+                   GROUP BY e.class
                    ORDER BY e.class, e.lap_time_ms ASC""",
                 (track, track),
             ).fetchall()
         return [dict(r) for r in rows]
+    finally:
+        conn.close()
 
 
 def get_user_times(discord_id: str, track: Optional[str] = None) -> list[dict]:
-    with _connect() as conn:
+    conn = _connect()
+    try:
         if track:
             rows = conn.execute(
                 """SELECT * FROM time_entries
@@ -104,10 +120,13 @@ def get_user_times(discord_id: str, track: Optional[str] = None) -> list[dict]:
                 (discord_id,),
             ).fetchall()
         return [dict(r) for r in rows]
+    finally:
+        conn.close()
 
 
 def get_history(track: str, class_: Optional[str] = None) -> list[dict]:
-    with _connect() as conn:
+    conn = _connect()
+    try:
         if class_:
             rows = conn.execute(
                 """SELECT * FROM time_entries
@@ -123,12 +142,18 @@ def get_history(track: str, class_: Optional[str] = None) -> list[dict]:
                 (track,),
             ).fetchall()
         return [dict(r) for r in rows]
+    finally:
+        conn.close()
 
 
 def delete_entry(entry_id: int, discord_id: str) -> bool:
-    with _connect() as conn:
-        cur = conn.execute(
-            "DELETE FROM time_entries WHERE id = ? AND discord_id = ?",
-            (entry_id, discord_id),
-        )
-        return cur.rowcount > 0
+    conn = _connect()
+    try:
+        with conn:
+            cur = conn.execute(
+                "DELETE FROM time_entries WHERE id = ? AND discord_id = ?",
+                (entry_id, discord_id),
+            )
+            return cur.rowcount > 0
+    finally:
+        conn.close()
