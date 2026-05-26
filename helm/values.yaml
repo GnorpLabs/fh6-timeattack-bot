@@ -1,0 +1,15 @@
+image:
+  repository: fh6-timeattack-bot
+  tag: latest
+  pullPolicy: IfNotPresent
+
+discord:
+  token: ""
+  guildId: ""
+
+storage:
+  storageClass: ""
+  data:
+    size: 1Gi
+  screenshots:
+    size: 5Gi

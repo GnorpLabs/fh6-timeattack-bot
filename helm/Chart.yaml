@@ -1,0 +1,6 @@
+apiVersion: v2
+name: fh6-timeattack-bot
+description: FH6 Time Attack Discord Bot
+type: application
+version: 0.1.0
+appVersion: "1.0.0"

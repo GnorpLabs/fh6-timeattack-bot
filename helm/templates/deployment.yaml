@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fh6-timeattack-bot
+  labels:
+    app: fh6-timeattack-bot
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: fh6-timeattack-bot
+  template:
+    metadata:
+      labels:
+        app: fh6-timeattack-bot
+    spec:
+      containers:
+        - name: bot
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          envFrom:
+            - secretRef:
+                name: fh6-timeattack-bot-secret
+          volumeMounts:
+            - name: data
+              mountPath: /app/data
+            - name: screenshots
+              mountPath: /app/screenshots
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: fh6-timeattack-bot-data
+        - name: screenshots
+          persistentVolumeClaim:
+            claimName: fh6-timeattack-bot-screenshots
