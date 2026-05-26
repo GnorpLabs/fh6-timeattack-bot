@@ -9,4 +9,6 @@ COPY . .
 
 RUN mkdir -p /app/data /app/screenshots
 
+RUN useradd -m botuser && chown -R botuser:botuser /app
+USER botuser
 CMD ["python", "bot.py"]

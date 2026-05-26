@@ -1,5 +1,12 @@
 .env
-data/timeattack.db
+.DS_Store
+venv/
+env/
+.venv/
+.idea/
+.vscode/
+data/*
+!data/.gitkeep
 screenshots/*
 !screenshots/.gitkeep
 __pycache__/
