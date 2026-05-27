@@ -12,10 +12,12 @@ CAR_CLASS_MAP: dict[int, str] = {
     0: "D", 1: "C", 2: "B", 3: "A", 4: "S1", 5: "S2", 6: "R", 7: "X",
 }
 
+_BOT_KEY: web.AppKey = web.AppKey("bot")
+
 
 def create_app(bot) -> web.Application:
     app = web.Application()
-    app["bot"] = bot
+    app[_BOT_KEY] = bot
     app.router.add_get("/api/vehicles", _handle_vehicles)
     app.router.add_get("/api/tracks", _handle_tracks)
     app.router.add_post("/api/lap", _handle_lap)
