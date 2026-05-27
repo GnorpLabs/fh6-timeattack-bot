@@ -119,15 +119,17 @@ File: `%APPDATA%\FH6BotRelay\config.json`
 {
   "token": "abc123...",
   "api_url": "https://your-bot-host.example.com",
+  "discord_id": "123456789012345678",
   "udp_port": 20440
 }
 ```
 
-On first launch, if either `token` or `api_url` is absent, a setup modal prompts the user for both:
+On first launch, if any of `token`, `api_url`, or `discord_id` is absent, a setup modal prompts the user for all three:
 - **Server address** — IP address or FQDN of the bot server (e.g. `192.168.1.1` or `bot.example.com`). The exe constructs the full URL as `https://<input>`.
+- **Discord User ID** — numeric Discord user ID (found via Discord Developer Mode: right-click profile → Copy User ID).
 - **Token** — pasted from the `/dataout-register` Discord response.
 
-Both are saved to `config.json` and not requested again. If the API subsequently returns `401`, only the token prompt is shown (the server address stays unchanged).
+All three are saved to `config.json` and not requested again. If the API subsequently returns `401`, only the token prompt is shown (server address and Discord user ID stay unchanged).
 
 ### Build
 
@@ -195,6 +197,8 @@ Request body (JSON):
 ```json
 {
   "token": "abc123...",
+  "discord_id": "123456789012345678",
+  "discord_username": "playername",
   "lap_time_ms": 83456,
   "track": "Hokubu Circuit",
   "vehicle_name": "2024 Toyota GR86",
@@ -204,14 +208,16 @@ Request body (JSON):
 }
 ```
 
+The exe populates `discord_id` from `config.json` and `discord_username` from the same setup flow. This avoids the bot needing to call `fetch_user()` at submission time.
+
 Logic:
 1. SHA-256 hash the incoming token, look up in `tokens` table
 2. Return `401 {"reason": "invalid_token"}` if not found
 3. Return `401 {"reason": "token_expired"}` if `expires_at` is past
-4. Validate `track` is in `config.TRACKS`, `vehicle_name` is in `config.VEHICLES`
-5. Map `car_class_int` → class string (`{0:"D", 1:"C", 2:"B", 3:"A", 4:"S1", 5:"S2", 6:"R", 7:"X"}`)
-6. Resolve username: `user = await bot.fetch_user(int(discord_id))` → `username = user.name`
-7. Call `add_entry(discord_id, username, track, vehicle_name, class_, lap_time_ms, screenshot_path=None, source='telemetry', raw_telemetry=json_blob)`
+4. Verify `discord_id` in the request matches the `discord_id` stored against the token — return `403` if mismatch
+5. Validate `track` is in `config.TRACKS`, `vehicle_name` is in `config.VEHICLES`
+6. Map `car_class_int` → class string (`{0:"D", 1:"C", 2:"B", 3:"A", 4:"S1", 5:"S2", 6:"R", 7:"X"}`)
+7. Call `add_entry(discord_id, discord_username, track, vehicle_name, class_, lap_time_ms, screenshot_path=None, source='telemetry', raw_telemetry=json_blob)`
 8. DM the Discord user a confirmation embed (same format as `/submit` response)
 9. Return `200 {"entry_id": 42}`
 
