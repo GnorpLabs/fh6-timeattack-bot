@@ -33,9 +33,15 @@ def setup_logger() -> logging.Logger:
     if logger.handlers:
         return logger
     logger.setLevel(logging.DEBUG)
+    fmt = logging.Formatter("%(asctime)s  %(levelname)-7s  %(message)s")
     fh = RotatingFileHandler(LOG_PATH, maxBytes=2_000_000, backupCount=2, encoding="utf-8")
-    fh.setFormatter(logging.Formatter("%(asctime)s  %(levelname)-7s  %(message)s"))
+    fh.setFormatter(fmt)
+    fh.setLevel(logging.DEBUG)
     logger.addHandler(fh)
+    sh = logging.StreamHandler()
+    sh.setFormatter(fmt)
+    sh.setLevel(logging.DEBUG)
+    logger.addHandler(sh)
     return logger
 
 

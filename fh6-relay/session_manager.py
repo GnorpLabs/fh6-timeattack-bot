@@ -1,9 +1,12 @@
+import logging
 import threading
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Optional
 
 from packet_parser import FH6Packet
+
+log = logging.getLogger("fh6relay")
 
 
 @dataclass
@@ -31,12 +34,21 @@ class SessionManager:
 
         if self._prev_last_lap is None:
             self._prev_last_lap = packet.last_lap
+            log.debug(
+                "SessionMgr: initialized  last_lap=%.4f  current_lap=%.4f"
+                "  best_lap=%.4f  lap_number=%d",
+                packet.last_lap, packet.current_lap, packet.best_lap, packet.lap_number,
+            )
             return None
 
         # FH6 time attack mode does not increment LapNumber — detect completion
         # by watching LastLap change to a new non-zero value instead.
         if packet.last_lap > 0 and packet.last_lap != self._prev_last_lap:
             self._lap_count += 1
+            log.debug(
+                "SessionMgr: lap detected  last_lap %.4f → %.4f",
+                self._prev_last_lap, packet.last_lap,
+            )
             lap = LapRecord(
                 lap_number=self._lap_count,
                 lap_time_ms=round(packet.last_lap * 1000),
