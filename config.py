@@ -10,6 +10,7 @@ DISCORD_GUILD_ID: str = os.getenv("DISCORD_GUILD_ID", "")
 
 DB_PATH: Path = Path(os.getenv("DB_PATH", "data/timeattack.db"))
 SCREENSHOTS_DIR: Path = Path(os.getenv("SCREENSHOTS_DIR", "screenshots"))
+API_PORT: int = int(os.getenv("API_PORT", "8080"))
 
 TRACKS: list[str] = [
     "Legend island",
