@@ -1,6 +1,10 @@
+import asyncio
+
 import aiohttp
 
 from session_manager import LapRecord
+
+_TIMEOUT = aiohttp.ClientTimeout(total=10)
 
 
 async def submit_lap(
@@ -23,9 +27,17 @@ async def submit_lap(
         "car_ordinal": lap.car_ordinal,
         "raw_telemetry": lap.raw_telemetry,
     }
-    async with aiohttp.ClientSession() as session:
-        async with session.post(f"{api_url}/api/lap", json=payload) as resp:
-            data = await resp.json()
-            if resp.status == 200:
-                return data
-            raise ValueError(data.get("reason", "unknown_error"))
+    try:
+        async with aiohttp.ClientSession(timeout=_TIMEOUT) as session:
+            async with session.post(f"{api_url}/api/lap", json=payload) as resp:
+                try:
+                    data = await resp.json()
+                except Exception:
+                    data = {}
+                if resp.status == 200:
+                    return data
+                raise ValueError(data.get("reason", "unknown_error"))
+    except aiohttp.ClientConnectorError:
+        raise ValueError("connection_refused")
+    except asyncio.TimeoutError:
+        raise ValueError("timeout")

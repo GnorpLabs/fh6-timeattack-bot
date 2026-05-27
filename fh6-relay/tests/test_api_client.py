@@ -1,3 +1,6 @@
+import asyncio
+
+import aiohttp
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 import api_client
@@ -97,3 +100,41 @@ async def test_submit_lap_sends_correct_payload():
     assert payload["track"] == "Hokubu Circuit"
     assert payload["vehicle_name"] == "2024 Toyota GR86"
     assert payload["car_class_int"] == 3
+
+
+async def test_submit_lap_raises_value_error_on_connection_refused():
+    with patch("api_client.aiohttp.ClientSession") as MockSession:
+        MockSession.return_value.__aenter__ = AsyncMock(
+            side_effect=aiohttp.ClientConnectorError(
+                connection_key=None, os_error=OSError("refused")
+            )
+        )
+        MockSession.return_value.__aexit__ = AsyncMock(return_value=False)
+        with pytest.raises(ValueError, match="connection_refused"):
+            await api_client.submit_lap(
+                api_url="https://bot.example.com",
+                token="tok",
+                discord_id="111",
+                discord_username="alice",
+                lap=_make_lap(),
+                track="Hokubu Circuit",
+                vehicle_name="2024 Toyota GR86",
+            )
+
+
+async def test_submit_lap_raises_value_error_on_timeout():
+    with patch("api_client.aiohttp.ClientSession") as MockSession:
+        MockSession.return_value.__aenter__ = AsyncMock(
+            side_effect=asyncio.TimeoutError()
+        )
+        MockSession.return_value.__aexit__ = AsyncMock(return_value=False)
+        with pytest.raises(ValueError, match="timeout"):
+            await api_client.submit_lap(
+                api_url="https://bot.example.com",
+                token="tok",
+                discord_id="111",
+                discord_username="alice",
+                lap=_make_lap(),
+                track="Hokubu Circuit",
+                vehicle_name="2024 Toyota GR86",
+            )
