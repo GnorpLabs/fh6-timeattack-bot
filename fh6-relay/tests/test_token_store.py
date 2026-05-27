@@ -53,3 +53,8 @@ def test_update_token_replaces_only_token():
     cfg = token_store.load_config()
     assert cfg["token"] == "newtoken"
     assert cfg["discord_id"] == "1"
+
+
+def test_load_config_returns_empty_dict_for_corrupt_json(tmp_path):
+    token_store.CONFIG_FILE.write_text("{corrupt", encoding="utf-8")
+    assert token_store.load_config() == {}

@@ -2,7 +2,10 @@ import json
 import os
 from pathlib import Path
 
-CONFIG_DIR: Path = Path(os.environ.get("APPDATA", Path.home())) / "FH6BotRelay"
+if "APPDATA" in os.environ:
+    CONFIG_DIR: Path = Path(os.environ["APPDATA"]) / "FH6BotRelay"
+else:
+    CONFIG_DIR = Path.home() / "FH6BotRelay"
 CONFIG_FILE: Path = CONFIG_DIR / "config.json"
 
 _REQUIRED_KEYS = ("token", "api_url", "discord_id", "discord_username")
@@ -11,12 +14,17 @@ _REQUIRED_KEYS = ("token", "api_url", "discord_id", "discord_username")
 def load_config() -> dict:
     if not CONFIG_FILE.exists():
         return {}
-    return json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
+    try:
+        return json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return {}
 
 
 def _save_raw(cfg: dict) -> None:
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-    CONFIG_FILE.write_text(json.dumps(cfg, indent=2), encoding="utf-8")
+    tmp = CONFIG_FILE.with_suffix(".tmp")
+    tmp.write_text(json.dumps(cfg, indent=2), encoding="utf-8")
+    tmp.replace(CONFIG_FILE)  # atomic on POSIX; near-atomic on Windows
 
 
 def save_setup(api_url: str, discord_id: str, discord_username: str, token: str) -> None:
