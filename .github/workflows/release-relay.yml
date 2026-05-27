@@ -6,29 +6,20 @@ on:
       - 'v*'
 
 jobs:
-  # ── 1. Run relay unit tests on the Linux runner ────────────────────────────
+  # ── 1. Run relay unit tests ────────────────────────────────────────────────
   test:
     name: Relay unit tests
     runs-on: self-hosted
-    # No container — running both jobs directly on the host avoids the
-    # root-ownership problem that occurs when a container job (runs as root)
-    # leaves files the next host job (runs as gha) can't clean up.
+    container:
+      # python:3.11-slim is public and gives us pip. Checkout runs as root
+      # inside the container, so it is never blocked by root-owned workspace
+      # files. The build job (running on the host) owns the ownership cleanup.
+      image: python:3.11-slim
     permissions:
       contents: read
       packages: read
 
     steps:
-      # The workspace may contain root-owned files left by a previous container
-      # job (e.g. cdrx/pyinstaller-windows dist/ output). gha cannot delete
-      # those directly, but can via Docker running as root. This is self-healing:
-      # it runs before every checkout so stale root-owned files never block us.
-      - name: Fix workspace ownership
-        run: |
-          docker run --rm \
-            -v "$GITHUB_WORKSPACE:/ws" \
-            alpine \
-            chown -R "$(id -u):$(id -g)" /ws
-
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
       - name: Install test dependencies
@@ -44,13 +35,23 @@ jobs:
     name: Build exe & publish release
     needs: test
     runs-on: self-hosted
-    # No container — checkout on the host, invoke wine image via docker run
-    # for just the PyInstaller build step.
+    # No container — checkout and release run on the host as gha.
     permissions:
       contents: write
       packages: read
 
     steps:
+      # The test job runs as root inside python:3.11-slim, leaving root-owned
+      # files in the shared workspace. gha cannot clean those directly, but
+      # can via docker running as root. This runs before every checkout so
+      # the workspace is always gha-owned when checkout attempts its rm -rf.
+      - name: Fix workspace ownership
+        run: |
+          docker run --rm \
+            -v "$GITHUB_WORKSPACE:/ws" \
+            alpine \
+            chown -R "$(id -u):$(id -g)" /ws
+
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
       - name: Build fh6-relay.exe via Wine + PyInstaller
