@@ -18,6 +18,17 @@ jobs:
       packages: read
 
     steps:
+      # The workspace may contain root-owned files left by a previous container
+      # job (e.g. cdrx/pyinstaller-windows dist/ output). gha cannot delete
+      # those directly, but can via Docker running as root. This is self-healing:
+      # it runs before every checkout so stale root-owned files never block us.
+      - name: Fix workspace ownership
+        run: |
+          docker run --rm \
+            -v "$GITHUB_WORKSPACE:/ws" \
+            alpine \
+            chown -R "$(id -u):$(id -g)" /ws
+
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
       - name: Install test dependencies
