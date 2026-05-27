@@ -123,7 +123,11 @@ File: `%APPDATA%\FH6BotRelay\config.json`
 }
 ```
 
-If `token` is absent or the API returns `401`, a modal prompts the user to paste their token from Discord. Token is saved and not requested again until it expires (bot returns `401` with `{"reason": "token_expired"}`).
+On first launch, if either `token` or `api_url` is absent, a setup modal prompts the user for both:
+- **Server address** — IP address or FQDN of the bot server (e.g. `192.168.1.1` or `bot.example.com`). The exe constructs the full URL as `https://<input>`.
+- **Token** — pasted from the `/dataout-register` Discord response.
+
+Both are saved to `config.json` and not requested again. If the API subsequently returns `401`, only the token prompt is shown (the server address stays unchanged).
 
 ### Build
 
