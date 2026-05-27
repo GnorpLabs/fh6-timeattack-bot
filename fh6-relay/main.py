@@ -69,7 +69,6 @@ _WATCH_FIELDS = (
     "BestLap", "LastLap", "LapNumber", "RacePosition",
     "CarOrdinal", "CarClass", "CarPI", "DrivetrainType", "NumCylinders",
     "Gear",
-    "Unk_284", "Unk_288", "Unk_292", "Unk_323",
 )
 
 
