@@ -67,10 +67,10 @@ jobs:
 
       - name: Verify exe was produced
         shell: bash
-        run: test -f fh6-relay/dist/fh6-relay.dist/fh6-relay.exe
+        run: test -f fh6-relay/dist/main.dist/fh6-relay.exe
 
       - name: Zip dist folder for release
-        run: Compress-Archive -Path fh6-relay/dist/fh6-relay.dist/* -DestinationPath fh6-relay/dist/fh6-relay.zip
+        run: Compress-Archive -Path fh6-relay/dist/main.dist/* -DestinationPath fh6-relay/dist/fh6-relay.zip
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
