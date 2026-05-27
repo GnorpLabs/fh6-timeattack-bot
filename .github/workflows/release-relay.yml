@@ -10,8 +10,9 @@ jobs:
   test:
     name: Relay unit tests
     runs-on: self-hosted
-    container:
-      image: python:3.11-slim
+    # No container — running both jobs directly on the host avoids the
+    # root-ownership problem that occurs when a container job (runs as root)
+    # leaves files the next host job (runs as gha) can't clean up.
     permissions:
       contents: read
       packages: read
@@ -32,9 +33,8 @@ jobs:
     name: Build exe & publish release
     needs: test
     runs-on: self-hosted
-    # No container here — actions/checkout (Node 20) can't run inside
-    # cdrx/pyinstaller-windows (old glibc). Instead we checkout on the host
-    # and invoke the wine image via `docker run` for just the build step.
+    # No container — checkout on the host, invoke wine image via docker run
+    # for just the PyInstaller build step.
     permissions:
       contents: write
       packages: read
