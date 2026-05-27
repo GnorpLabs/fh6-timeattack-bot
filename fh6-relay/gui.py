@@ -1,4 +1,6 @@
 import asyncio
+import os
+import subprocess
 import threading
 import tkinter as tk
 from tkinter import ttk, messagebox
@@ -10,6 +12,8 @@ from PIL import Image, ImageDraw
 
 import api_client
 import token_store
+from relay_logger import DebugStats, LOG_PATH
+from packet_parser import PACKET_SIZE
 
 if TYPE_CHECKING:
     from session_manager import LapRecord, SessionManager
@@ -22,9 +26,15 @@ def _format_lap_time(ms: int) -> str:
 
 
 class App:
-    def __init__(self, session: "SessionManager", loop: asyncio.AbstractEventLoop) -> None:
+    def __init__(
+        self,
+        session: "SessionManager",
+        loop: asyncio.AbstractEventLoop,
+        stats: DebugStats,
+    ) -> None:
         self.session = session
         self.loop = loop
+        self.stats = stats
         self._icon: pystray.Icon | None = None
 
     def run(self) -> None:
@@ -37,6 +47,7 @@ class App:
             "FH6 Relay",
             pystray.Menu(
                 pystray.MenuItem("Session Review", self._on_open_review),
+                pystray.MenuItem("Telemetry Monitor", self._on_open_monitor),
                 pystray.MenuItem("Settings", self._on_open_settings),
                 pystray.MenuItem("Quit", self._on_quit),
             ),
@@ -51,12 +62,81 @@ class App:
     def _on_open_review(self, icon: pystray.Icon, item: pystray.MenuItem) -> None:
         threading.Thread(target=self._show_review_window, daemon=True).start()
 
+    def _on_open_monitor(self, icon: pystray.Icon, item: pystray.MenuItem) -> None:
+        threading.Thread(target=self._show_monitor_window, daemon=True).start()
+
     def _on_open_settings(self, icon: pystray.Icon, item: pystray.MenuItem) -> None:
         threading.Thread(target=_show_settings_dialog, daemon=True).start()
 
     def _on_quit(self, icon: pystray.Icon, item: pystray.MenuItem) -> None:
         icon.stop()
         self.loop.call_soon_threadsafe(self.loop.stop)
+
+    def _show_monitor_window(self) -> None:
+        root = tk.Tk()
+        root.title("FH6 Relay — Telemetry Monitor")
+        root.resizable(False, False)
+
+        def _row(parent, label: str, row: int) -> tk.StringVar:
+            tk.Label(parent, text=label, anchor="w", width=22).grid(row=row, column=0, padx=(12, 4), pady=2, sticky="w")
+            var = tk.StringVar(value="—")
+            tk.Label(parent, textvariable=var, anchor="w", width=30, font=("Courier", 10)).grid(row=row, column=1, padx=(0, 12), sticky="w")
+            return var
+
+        # UDP reception section
+        tk.Label(root, text="UDP Reception", font=("", 10, "bold")).grid(row=0, column=0, columnspan=2, padx=12, pady=(10, 2), sticky="w")
+        v_total   = _row(root, "Packets received:", 1)
+        v_size    = _row(root, "Last packet size:", 2)
+        v_bad     = _row(root, "Bad size packets:", 3)
+
+        tk.Label(root, text="Game State", font=("", 10, "bold")).grid(row=4, column=0, columnspan=2, padx=12, pady=(10, 2), sticky="w")
+        v_raceon  = _row(root, "IsRaceOn:", 5)
+        v_lapnum  = _row(root, "Lap number:", 6)
+        v_lastlap = _row(root, "Last lap time:", 7)
+
+        tk.Label(root, text="Session", font=("", 10, "bold")).grid(row=8, column=0, columnspan=2, padx=12, pady=(10, 2), sticky="w")
+        v_recorded = _row(root, "Laps recorded:", 9)
+
+        # Log file path + open button
+        tk.Label(root, text="Log file:", font=("", 9), fg="gray").grid(row=10, column=0, padx=12, pady=(10, 0), sticky="w")
+        tk.Label(root, text=LOG_PATH, font=("Courier", 8), fg="gray", wraplength=300, justify="left").grid(row=11, column=0, columnspan=2, padx=12, sticky="w")
+        tk.Button(root, text="Open Log File", command=lambda: _open_log()).grid(row=12, column=0, columnspan=2, pady=(4, 12))
+
+        def _open_log() -> None:
+            if os.path.exists(LOG_PATH):
+                os.startfile(LOG_PATH)  # type: ignore[attr-defined]
+            else:
+                messagebox.showinfo("No Log Yet", "No log file found — start driving to generate one.", parent=root)
+
+        def _update() -> None:
+            s = self.stats.snapshot()
+            v_total.set(str(s["packets_total"]))
+            if s["packets_total"] == 0:
+                v_size.set("— (no data yet)")
+            elif s["bad_size_count"] > 0:
+                v_size.set(f"{s['last_size']} bytes  ✗ (expected {PACKET_SIZE})")
+            else:
+                v_size.set(f"{s['last_size']} bytes  ✓")
+            bad = s["bad_size_count"]
+            v_bad.set(f"{bad}" + (f"  (last: {s['last_bad_size']}B)" if bad else ""))
+            race_on = s["is_race_on"]
+            if race_on == -1:
+                v_raceon.set("— (no data yet)")
+            else:
+                v_raceon.set(f"{race_on}  ({'Active' if race_on else 'Inactive'})")
+            v_lapnum.set(str(s["lap_number"]))
+            last = s["last_lap_s"]
+            if last > 0:
+                m, rest = divmod(round(last * 1000), 60_000)
+                sec, ms = divmod(rest, 1_000)
+                v_lastlap.set(f"{m}:{sec:02d}.{ms:03d}" if m else f"{sec}.{ms:03d}")
+            else:
+                v_lastlap.set("—")
+            v_recorded.set(str(s["laps_recorded"]))
+            root.after(500, _update)
+
+        _update()
+        root.mainloop()
 
     def _show_review_window(self) -> None:
         cfg = token_store.load_config()
