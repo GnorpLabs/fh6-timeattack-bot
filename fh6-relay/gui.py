@@ -4,6 +4,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 from typing import TYPE_CHECKING
 
+import aiohttp
 import pystray
 from PIL import Image, ImageDraw
 
@@ -12,6 +13,12 @@ import token_store
 
 if TYPE_CHECKING:
     from session_manager import LapRecord, SessionManager
+
+
+def _format_lap_time(ms: int) -> str:
+    m, rest = divmod(ms, 60_000)
+    s, ms_part = divmod(rest, 1_000)
+    return f"{m}:{s:02d}.{ms_part:03d}" if m else f"{s}.{ms_part:03d}"
 
 
 class App:
@@ -37,10 +44,7 @@ class App:
         self._icon.run()
 
     def notify_new_lap(self, lap: "LapRecord") -> None:
-        ms = lap.lap_time_ms
-        m, rest = divmod(ms, 60_000)
-        s, ms_part = divmod(rest, 1_000)
-        time_str = f"{m}:{s:02d}.{ms_part:03d}" if m else f"{s}.{ms_part:03d}"
+        time_str = _format_lap_time(lap.lap_time_ms)
         if self._icon:
             self._icon.notify(f"Lap {lap.lap_number} recorded: {time_str}", "FH6 Relay")
 
@@ -84,11 +88,7 @@ class App:
         tree.pack(fill="both", expand=True, padx=10, pady=4)
 
         for lap in self.session.get_laps_snapshot():
-            ms = lap.lap_time_ms
-            m, rest = divmod(ms, 60_000)
-            s, ms_part = divmod(rest, 1_000)
-            time_str = f"{m}:{s:02d}.{ms_part:03d}" if m else f"{s}.{ms_part:03d}"
-            tree.insert("", "end", iid=str(lap.lap_number), values=(lap.lap_number, time_str))
+            tree.insert("", "end", iid=str(lap.lap_number), values=(lap.lap_number, _format_lap_time(lap.lap_time_ms)))
 
         status_var = tk.StringVar(value="Select a lap and fill in track + vehicle, then submit.")
         tk.Label(root, textvariable=status_var, anchor="w").pack(fill="x", padx=10)
@@ -153,8 +153,6 @@ class App:
 
         # Fetch tracks + vehicles from bot API in background
         if cfg.get("api_url"):
-            import aiohttp
-
             async def _fetch() -> tuple[list, list]:
                 async with aiohttp.ClientSession() as sess:
                     async with sess.get(f"{cfg['api_url']}/api/tracks") as r:
