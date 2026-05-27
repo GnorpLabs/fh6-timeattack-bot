@@ -30,50 +30,47 @@ jobs:
         working-directory: fh6-relay
         run: pytest -v
 
-  # ── 2. Build Windows .exe via Wine + PyInstaller, publish GitHub Release ───
+  # ── 2. Build Windows .exe via Nuitka on native Windows, publish Release ────
   build-and-release:
     name: Build exe & publish release
     needs: test
-    runs-on: self-hosted
-    # No container — checkout and release run on the host as gha.
+    # GitHub-hosted Windows runner: native compilation, no Wine, no Docker.
+    # Nuitka compiles Python → C → real Windows binary, which avoids the
+    # PyInstaller self-extraction behaviour that triggers AV heuristics.
+    runs-on: windows-latest
     permissions:
       contents: write
-      packages: read
 
     steps:
-      # The test job runs as root inside python:3.11-slim, leaving root-owned
-      # files in the shared workspace. gha cannot clean those directly, but
-      # can via docker running as root. This runs before every checkout so
-      # the workspace is always gha-owned when checkout attempts its rm -rf.
-      - name: Fix workspace ownership
-        run: |
-          docker run --rm \
-            -v "$GITHUB_WORKSPACE:/ws" \
-            alpine \
-            chown -R "$(id -u):$(id -g)" /ws
-
-      # Remove all unused Docker images from previous runs before pulling the
-      # large batonogov/pyinstaller-windows image. The runner cleanup hook only
-      # prunes dangling images; this clears all tagged images (python:3.11-slim,
-      # cdrx/pyinstaller-windows, alpine, etc.) that are no longer needed.
-      - name: Free disk space
-        run: docker system prune -af
-
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
-      - name: Build fh6-relay.exe via Wine + PyInstaller
-        # No CMD: entrypoint auto-discovers *.spec in /src, runs pip install, then
-        # pyinstaller --clean -y --dist ./dist --workpath /tmp <spec>
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: '3.11'
+
+      - name: Install build dependencies
+        working-directory: fh6-relay
+        run: pip install aiohttp pystray Pillow nuitka ordered-set zstandard
+
+      - name: Build fh6-relay.exe with Nuitka
+        working-directory: fh6-relay
         run: |
-          docker run --rm \
-            -v "${{ github.workspace }}/fh6-relay:/src" \
-            batonogov/pyinstaller-windows:latest
+          python -m nuitka `
+            --standalone `
+            --windows-console-mode=disable `
+            --include-package=pystray `
+            --include-package=PIL `
+            --assume-yes-for-downloads `
+            --output-filename=fh6-relay `
+            --output-dir=dist `
+            main.py
 
       - name: Verify exe was produced
-        run: test -f fh6-relay/dist/fh6-relay.exe
+        shell: bash
+        run: test -f fh6-relay/dist/fh6-relay.dist/fh6-relay.exe
 
-      - name: Zip exe for release
-        run: zip -j fh6-relay/dist/fh6-relay.zip fh6-relay/dist/fh6-relay.exe
+      - name: Zip dist folder for release
+        run: Compress-Archive -Path fh6-relay/dist/fh6-relay.dist/* -DestinationPath fh6-relay/dist/fh6-relay.zip
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
@@ -86,9 +83,10 @@ jobs:
 
             ### Setup
             1. Run `/dataout-register` in Discord to get your token.
-            2. Download `fh6-relay.zip` below, extract it, and run `fh6-relay.exe`.
-            3. Fill in the first-launch setup dialog (server address, Discord User ID, username, token).
-            4. Configure FH6 Data Out → `127.0.0.1:20440`.
+            2. Download `fh6-relay.zip` below and extract it to a folder.
+            3. Run `fh6-relay.exe` from that folder.
+            4. Fill in the first-launch setup dialog (server address, Discord User ID, username, token).
+            5. Configure FH6 Data Out → `127.0.0.1:20440`.
 
             See the [README](https://github.com/${{ github.repository }}#data-out-auto-submit) for full instructions.
           files: fh6-relay/dist/fh6-relay.zip
