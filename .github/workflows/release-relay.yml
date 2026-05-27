@@ -32,11 +32,9 @@ jobs:
     name: Build exe & publish release
     needs: test
     runs-on: self-hosted
-    container:
-      # Wine-based image that runs PyInstaller under Wine to produce Windows
-      # binaries on a Linux host. If your cluster can't reach Docker Hub,
-      # mirror this image to ghcr.io/gnorplabs/gnorplabs/pyinstaller-windows.
-      image: cdrx/pyinstaller-windows:python3
+    # No container here — actions/checkout (Node 20) can't run inside
+    # cdrx/pyinstaller-windows (old glibc). Instead we checkout on the host
+    # and invoke the wine image via `docker run` for just the build step.
     permissions:
       contents: write
       packages: read
@@ -44,17 +42,13 @@ jobs:
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
-      - name: Install Python dependencies (Windows target)
-        working-directory: fh6-relay
+      - name: Build fh6-relay.exe via Wine + PyInstaller
         run: |
-          pip install \
-            "aiohttp>=3.9.0,<4.0.0" \
-            "pystray>=0.19.0,<1.0.0" \
-            "Pillow>=10.0.0,<11.0.0"
-
-      - name: Build fh6-relay.exe
-        working-directory: fh6-relay
-        run: pyinstaller build.spec
+          docker run --rm \
+            -v "${{ github.workspace }}/fh6-relay:/src" \
+            -w /src \
+            cdrx/pyinstaller-windows:python3 \
+            bash -c 'pip install "aiohttp>=3.9.0,<4.0.0" "pystray>=0.19.0,<1.0.0" "Pillow>=10.0.0,<11.0.0" && pyinstaller build.spec'
 
       - name: Verify exe was produced
         run: test -f fh6-relay/dist/fh6-relay.exe
