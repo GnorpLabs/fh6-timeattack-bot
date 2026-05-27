@@ -1,4 +1,5 @@
 import json
+import logging
 from datetime import datetime, timezone
 
 import discord
@@ -7,6 +8,8 @@ from aiohttp import web
 import config
 import database
 from utils import format_lap_time
+
+log = logging.getLogger(__name__)
 
 CAR_CLASS_MAP: dict[int, str] = {
     0: "D", 1: "C", 2: "B", 3: "A", 4: "S1", 5: "S2", 6: "R", 7: "X",
@@ -87,8 +90,8 @@ async def _handle_lap(request: web.Request) -> web.Response:
             body["discord_username"], body["track"], body["vehicle_name"],
             class_, body["lap_time_ms"], entry_id,
         ))
-    except Exception:
-        pass
+    except Exception as exc:
+        log.warning("Failed to DM user %s after lap submission: %r", body["discord_id"], exc)
 
     return web.json_response({"entry_id": entry_id})
 
