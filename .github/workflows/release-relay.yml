@@ -1,0 +1,79 @@
+name: 🏁 Build & Release fh6-relay.exe
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  # ── 1. Run relay unit tests on the Linux runner ────────────────────────────
+  test:
+    name: Relay unit tests
+    runs-on: self-hosted
+    container:
+      image: ghcr.io/gnorplabs/gnorplabs/gnorpbuntu:main
+    permissions:
+      contents: read
+      packages: read
+
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Install test dependencies
+        working-directory: fh6-relay
+        run: pip install aiohttp pytest pytest-asyncio
+
+      - name: Run tests
+        working-directory: fh6-relay
+        run: pytest -v
+
+  # ── 2. Build Windows .exe via Wine + PyInstaller, publish GitHub Release ───
+  build-and-release:
+    name: Build exe & publish release
+    needs: test
+    runs-on: self-hosted
+    container:
+      # Wine-based image that runs PyInstaller under Wine to produce Windows
+      # binaries on a Linux host. If your cluster can't reach Docker Hub,
+      # mirror this image to ghcr.io/gnorplabs/gnorplabs/pyinstaller-windows.
+      image: cdrx/pyinstaller-windows:python3
+    permissions:
+      contents: write
+      packages: read
+
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Install Python dependencies (Windows target)
+        working-directory: fh6-relay
+        run: |
+          pip install \
+            "aiohttp>=3.9.0,<4.0.0" \
+            "pystray>=0.19.0,<1.0.0" \
+            "Pillow>=10.0.0,<11.0.0"
+
+      - name: Build fh6-relay.exe
+        working-directory: fh6-relay
+        run: pyinstaller build.spec
+
+      - name: Verify exe was produced
+        run: test -f fh6-relay/dist/fh6-relay.exe
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
+        with:
+          name: fh6-relay ${{ github.ref_name }}
+          body: |
+            ## fh6-relay ${{ github.ref_name }}
+
+            Windows tray app for auto-submitting FH6 lap times via Data Out telemetry.
+
+            ### Setup
+            1. Run `/dataout-register` in Discord to get your token.
+            2. Download `fh6-relay.exe` below and run it.
+            3. Fill in the first-launch setup dialog (server address, Discord User ID, username, token).
+            4. Configure FH6 Data Out → `127.0.0.1:20440`.
+
+            See the [README](https://github.com/${{ github.repository }}#data-out-auto-submit) for full instructions.
+          files: fh6-relay/dist/fh6-relay.exe
+          generate_release_notes: false
