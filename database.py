@@ -86,6 +86,46 @@ def _migrate_time_entries_if_needed(conn: sqlite3.Connection) -> None:
     conn.execute("ALTER TABLE time_entries_v2 RENAME TO time_entries")
 
 
+_TOKEN_EXPIRY_DAYS = 30
+
+
+def _hash_token(plain: str) -> str:
+    return hashlib.sha256(plain.encode()).hexdigest()
+
+
+def create_token(discord_id: str) -> str:
+    plain = secrets.token_hex(32)
+    token_hash = _hash_token(plain)
+    expires_at = (datetime.now(timezone.utc) + timedelta(days=_TOKEN_EXPIRY_DAYS)).isoformat()
+    conn = _connect()
+    try:
+        with conn:
+            conn.execute(
+                """INSERT INTO tokens (discord_id, token_hash, expires_at)
+                   VALUES (?, ?, ?)
+                   ON CONFLICT(discord_id) DO UPDATE
+                   SET token_hash = excluded.token_hash,
+                       expires_at = excluded.expires_at""",
+                (discord_id, token_hash, expires_at),
+            )
+    finally:
+        conn.close()
+    return plain
+
+
+def get_token_row(plain: str) -> dict | None:
+    token_hash = _hash_token(plain)
+    conn = _connect()
+    try:
+        row = conn.execute(
+            "SELECT discord_id, token_hash, expires_at FROM tokens WHERE token_hash = ?",
+            (token_hash,),
+        ).fetchone()
+        return dict(row) if row else None
+    finally:
+        conn.close()
+
+
 def add_entry(
     discord_id: str,
     username: str,

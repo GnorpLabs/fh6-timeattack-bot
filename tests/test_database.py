@@ -211,3 +211,39 @@ def test_init_db_is_idempotent(fresh_db):
     entry = database.get_entry(entry_id)
     assert entry is not None
     assert entry["discord_id"] == "111"
+
+
+def test_create_token_returns_64_char_hex_string(fresh_db):
+    token = database.create_token("111")
+    assert len(token) == 64
+    assert all(c in "0123456789abcdef" for c in token)
+
+
+def test_create_token_each_call_returns_unique_token(fresh_db):
+    assert database.create_token("111") != database.create_token("222")
+
+
+def test_create_token_overwrites_existing_for_same_user(fresh_db):
+    old_token = database.create_token("111")
+    _new_token = database.create_token("111")
+    assert database.get_token_row(old_token) is None
+
+
+def test_get_token_row_returns_dict_with_discord_id(fresh_db):
+    token = database.create_token("111")
+    row = database.get_token_row(token)
+    assert row is not None
+    assert row["discord_id"] == "111"
+
+
+def test_get_token_row_unknown_token_returns_none(fresh_db):
+    database.create_token("111")
+    assert database.get_token_row("notarealtoken") is None
+
+
+def test_get_token_row_expires_at_is_in_the_future(fresh_db):
+    from datetime import datetime, timezone
+    token = database.create_token("111")
+    row = database.get_token_row(token)
+    expires_at = datetime.fromisoformat(row["expires_at"])
+    assert expires_at > datetime.now(timezone.utc)
