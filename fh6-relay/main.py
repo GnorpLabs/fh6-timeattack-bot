@@ -118,14 +118,14 @@ async def _async_main(app: App, port: int, stats: DebugStats) -> None:
         with stats._lock:
             prev_race_on = stats.is_race_on
             stats.is_race_on = packet.is_race_on
-            stats.lap_number = packet.lap_number
-            stats.last_lap_s = packet.last_lap
         if prev_race_on != packet.is_race_on:
             log.info("IsRaceOn: %d → %d", prev_race_on, packet.is_race_on)
         lap = app.session.on_packet(packet)
         if lap is not None:
             with stats._lock:
                 stats.laps_recorded += 1
+                stats.lap_number = lap.lap_number
+                stats.last_lap_s = lap.lap_time_ms / 1000
             log.info("Lap %d recorded: %.3fs", lap.lap_number, lap.lap_time_ms / 1000)
             app.notify_new_lap(lap)
 
