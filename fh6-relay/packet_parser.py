@@ -1,6 +1,8 @@
 import struct
 from dataclasses import dataclass
 
+# Byte offsets match the FH6 "car dash" sled telemetry format.
+# Reference: docs/superpowers/specs/2026-05-26-data-out-design.md
 PACKET_SIZE = 324
 
 

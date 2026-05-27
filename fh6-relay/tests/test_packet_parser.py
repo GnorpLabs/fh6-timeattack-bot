@@ -52,3 +52,21 @@ def test_parse_packet_race_position_extracted():
     pkt = _make_packet(race_position=2)
     result = packet_parser.parse_packet(pkt)
     assert result.race_position == 2
+
+
+def test_parse_packet_best_lap_extracted():
+    pkt = _make_packet(best_lap=95.123)
+    result = packet_parser.parse_packet(pkt)
+    assert abs(result.best_lap - 95.123) < 0.001
+
+
+def test_parse_packet_current_lap_extracted():
+    pkt = _make_packet(current_lap=12.5)
+    result = packet_parser.parse_packet(pkt)
+    assert abs(result.current_lap - 12.5) < 0.001
+
+
+def test_parse_packet_current_race_time_extracted():
+    pkt = _make_packet(current_race_time=300.0)
+    result = packet_parser.parse_packet(pkt)
+    assert abs(result.current_race_time - 300.0) < 0.001
