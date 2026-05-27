@@ -59,7 +59,7 @@ jobs:
           docker run --rm \
             -v "${{ github.workspace }}/fh6-relay:/src" \
             -w /src \
-            cdrx/pyinstaller-windows:python3 \
+            batonogov/pyinstaller-windows:latest \
             bash -c 'pip install "aiohttp>=3.9.0,<4.0.0" "pystray>=0.19.0,<1.0.0" "Pillow>=10.0.0,<11.0.0" && pyinstaller build.spec'
 
       - name: Verify exe was produced
