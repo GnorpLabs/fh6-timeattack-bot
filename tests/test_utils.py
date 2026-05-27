@@ -14,18 +14,31 @@ def test_parse_strips_whitespace():
     assert parse_lap_time("  1:23.456  ") == 83456
 
 
+def test_parse_sub_minute_no_minutes():
+    assert parse_lap_time("58.120") == 58120
+
+
+def test_parse_sub_minute_with_zero_minutes():
+    assert parse_lap_time("0:58.120") == 58120
+
+
 def test_parse_invalid_format_raises_value_error():
-    with pytest.raises(ValueError, match="Invalid time format"):
+    with pytest.raises(ValueError, match="isn't a valid time"):
         parse_lap_time("123.456")
 
 
+def test_parse_colon_ms_separator_raises_value_error():
+    with pytest.raises(ValueError, match="isn't a valid time"):
+        parse_lap_time("0:58:120")
+
+
 def test_parse_missing_milliseconds_raises_value_error():
-    with pytest.raises(ValueError, match="Invalid time format"):
+    with pytest.raises(ValueError, match="isn't a valid time"):
         parse_lap_time("1:23")
 
 
 def test_parse_seconds_over_59_raises_value_error():
-    with pytest.raises(ValueError, match="Seconds must be 0-59"):
+    with pytest.raises(ValueError, match="out of range"):
         parse_lap_time("1:60.000")
 
 

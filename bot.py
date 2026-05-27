@@ -1,10 +1,11 @@
 import asyncio
 import json
 import logging
-import os
 from pathlib import Path
 
+import aiohttp
 import discord
+from discord import app_commands
 from discord.ext import commands
 from dotenv import load_dotenv
 
@@ -26,6 +27,49 @@ COGS = [
 ]
 
 
+class TimeAttackBot(commands.Bot):
+    def __init__(self) -> None:
+        intents = discord.Intents.default()
+        super().__init__(command_prefix=commands.when_mentioned, intents=intents)
+        self.http_session: aiohttp.ClientSession | None = None
+
+    async def setup_hook(self) -> None:
+        self.http_session = aiohttp.ClientSession()
+
+        for cog in COGS:
+            await self.load_extension(cog)
+            log.info(f"Loaded cog: {cog}")
+
+        guild_id = config.DISCORD_GUILD_ID
+        if guild_id:
+            guild = discord.Object(id=int(guild_id))
+            self.tree.copy_global_to(guild=guild)
+            await self.tree.sync(guild=guild)
+            log.info(f"Slash commands synced to guild {guild_id}")
+        else:
+            await self.tree.sync()
+            log.info("Slash commands synced globally")
+
+        @self.tree.error
+        async def on_app_command_error(
+            interaction: discord.Interaction, error: app_commands.AppCommandError
+        ) -> None:
+            log.exception("Unhandled slash command error", exc_info=error)
+            msg = "Something went wrong. Please try again."
+            if interaction.response.is_done():
+                await interaction.followup.send(msg, ephemeral=True)
+            else:
+                await interaction.response.send_message(msg, ephemeral=True)
+
+    async def close(self) -> None:
+        if self.http_session:
+            await self.http_session.close()
+        await super().close()
+
+    async def on_ready(self) -> None:
+        log.info(f"Logged in as {self.user} (ID: {self.user.id})")
+
+
 async def main() -> None:
     vehicles_path = Path("data/vehicles.json")
     if vehicles_path.exists():
@@ -43,26 +87,7 @@ async def main() -> None:
     if not config.DISCORD_TOKEN:
         raise RuntimeError("DISCORD_TOKEN is not set — check your .env file")
 
-    intents = discord.Intents.default()
-    bot = commands.Bot(command_prefix="!", intents=intents)
-
-    @bot.event
-    async def on_ready() -> None:
-        log.info(f"Logged in as {bot.user} (ID: {bot.user.id})")
-        guild_id = config.DISCORD_GUILD_ID
-        if guild_id:
-            guild = discord.Object(id=int(guild_id))
-            bot.tree.copy_global_to(guild=guild)
-            await bot.tree.sync(guild=guild)
-            log.info(f"Slash commands synced to guild {guild_id}")
-        else:
-            await bot.tree.sync()
-            log.info("Slash commands synced globally")
-
-    for cog in COGS:
-        await bot.load_extension(cog)
-        log.info(f"Loaded cog: {cog}")
-
+    bot = TimeAttackBot()
     await bot.start(config.DISCORD_TOKEN)
 
 

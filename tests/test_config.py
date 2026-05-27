@@ -11,7 +11,7 @@ def test_tracks_are_strings():
 
 
 def test_classes_contains_expected_values():
-    assert set(CLASSES) == {"D", "C", "B", "A", "S1", "S2", "X"}
+    assert set(CLASSES) == {"D", "C", "B", "A", "S1", "S2", "R", "X"}
 
 
 def test_vehicles_starts_as_empty_list():

@@ -74,6 +74,28 @@ def test_get_leaderboard_no_class_groups_by_class(fresh_db):
     assert "A" in classes
 
 
+def test_get_leaderboard_no_class_top_5_per_class(fresh_db):
+    for i in range(7):
+        database.add_entry(str(i), f"User{i}", "Horizon Circuit", "Car", "S1", 80000 + i * 1000, "s/x.png")
+    entries = database.get_leaderboard("Horizon Circuit")
+    s1_entries = [e for e in entries if e["class"] == "S1"]
+    assert len(s1_entries) == 5
+    times = [e["lap_time_ms"] for e in s1_entries]
+    assert times == sorted(times)
+    assert times[0] == 80000
+
+
+def test_get_leaderboard_no_class_best_per_user(fresh_db):
+    database.add_entry("111", "Alice", "Horizon Circuit", "Car", "S1", 85000, "s/a.png")
+    database.add_entry("111", "Alice", "Horizon Circuit", "Car", "S1", 80000, "s/b.png")
+    database.add_entry("222", "Bob", "Horizon Circuit", "Car", "S1", 82000, "s/c.png")
+    entries = database.get_leaderboard("Horizon Circuit")
+    s1_entries = [e for e in entries if e["class"] == "S1"]
+    assert len(s1_entries) == 2
+    assert s1_entries[0]["discord_id"] == "111"
+    assert s1_entries[0]["lap_time_ms"] == 80000
+
+
 def test_get_leaderboard_empty_track_returns_empty(fresh_db):
     assert database.get_leaderboard("No Such Track") == []
 

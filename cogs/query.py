@@ -30,7 +30,7 @@ class QueryCog(commands.Cog):
             )
             return
 
-        title = f"Leaderboard — {track}" + (f" [{class_}]" if class_ else "")
+        title = f"Leaderboard — {track}" + (f" [{class_}]" if class_ else " — Top 5 Per Class")
         embed = discord.Embed(title=title, color=discord.Color.gold())
 
         if class_:
@@ -38,17 +38,26 @@ class QueryCog(commands.Cog):
                 f"{i}. **{e['username']}** — {format_lap_time(e['lap_time_ms'])} | {e['vehicle']}"
                 for i, e in enumerate(entries, 1)
             ]
-            embed.description = "\n".join(lines)
+            desc = "\n".join(lines)
+            embed.description = desc[:4096] + ("…" if len(desc) > 4096 else "")
         else:
             by_class: dict[str, list[dict]] = {}
             for e in entries:
                 by_class.setdefault(e["class"], []).append(e)
-            for cls, cls_entries in by_class.items():
+            for cls in config.CLASSES:
+                cls_entries = by_class.get(cls)
+                if not cls_entries:
+                    continue
                 lines = [
                     f"{i}. **{e['username']}** — {format_lap_time(e['lap_time_ms'])} | {e['vehicle']}"
                     for i, e in enumerate(cls_entries, 1)
                 ]
-                embed.add_field(name=f"Class {cls}", value="\n".join(lines), inline=False)
+                value = "\n".join(lines)
+                embed.add_field(
+                    name=f"Class {cls}",
+                    value=value[:1024] + ("…" if len(value) > 1024 else ""),
+                    inline=False,
+                )
 
         await interaction.response.send_message(embed=embed)
 

@@ -83,18 +83,20 @@ def get_leaderboard(track: str, class_: Optional[str] = None) -> list[dict]:
             ).fetchall()
         else:
             rows = conn.execute(
-                """SELECT e.discord_id, e.username, e.vehicle, e.class,
-                          e.lap_time_ms, e.screenshot_path, e.submitted_at
-                   FROM time_entries e
-                   INNER JOIN (
-                       SELECT class, MIN(lap_time_ms) AS min_time
-                       FROM time_entries WHERE track = ?
-                       GROUP BY class
-                   ) best ON e.class = best.class
-                             AND e.lap_time_ms = best.min_time
-                             AND e.track = ?
-                   ORDER BY e.class, e.lap_time_ms ASC""",
-                (track, track),
+                """SELECT discord_id, username, vehicle, class, lap_time_ms
+                   FROM (
+                       SELECT discord_id, username, vehicle, class,
+                              MIN(lap_time_ms) AS lap_time_ms,
+                              ROW_NUMBER() OVER (
+                                  PARTITION BY class ORDER BY MIN(lap_time_ms) ASC
+                              ) AS rn
+                       FROM time_entries
+                       WHERE track = ?
+                       GROUP BY discord_id, class
+                   )
+                   WHERE rn <= 5
+                   ORDER BY class, lap_time_ms ASC""",
+                (track,),
             ).fetchall()
         return [dict(r) for r in rows]
     finally:

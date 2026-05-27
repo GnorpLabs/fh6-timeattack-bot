@@ -1,6 +1,5 @@
 from pathlib import Path
 
-import aiohttp
 import discord
 from discord import app_commands
 from discord.ext import commands
@@ -18,11 +17,11 @@ class SubmissionCog(commands.Cog):
 
     @app_commands.command(name="submit", description="Submit a time attack lap time")
     @app_commands.describe(
-        time="Lap time in mm:ss.ms format (e.g. 1:23.456)",
-        track="Time attack track",
-        vehicle="Vehicle used",
-        class_="Vehicle class",
-        screenshot="Screenshot of your finish time",
+        time="e.g. 1:23.456 or 58.120 for sub-minute laps",
+        track="Select a track from the list",
+        vehicle="Search by name or manufacturer",
+        class_="Select a vehicle class from the list",
+        screenshot="Attach a .jpg, .png, or .webp screenshot",
     )
     @app_commands.rename(class_="class")
     async def submit(
@@ -37,21 +36,37 @@ class SubmissionCog(commands.Cog):
         try:
             lap_ms = parse_lap_time(time)
         except ValueError as exc:
-            await interaction.response.send_message(str(exc), ephemeral=True)
+            await interaction.response.send_message(f"**Time:** {exc}", ephemeral=True)
             return
 
         if track not in config.TRACKS:
-            await interaction.response.send_message("Unknown track. Use the autocomplete list.", ephemeral=True)
+            await interaction.response.send_message(
+                f"**Track:** `{track}` isn't recognised — select a track from the autocomplete list.",
+                ephemeral=True,
+            )
             return
 
         if class_ not in config.CLASSES:
-            await interaction.response.send_message("Unknown class. Use the autocomplete list.", ephemeral=True)
+            valid = ", ".join(f"`{c}`" for c in config.CLASSES)
+            await interaction.response.send_message(
+                f"**Class:** `{class_}` isn't valid — choose from {valid}.",
+                ephemeral=True,
+            )
+            return
+
+        vehicle_names = config.get_vehicle_names()
+        if vehicle_names and vehicle not in vehicle_names:
+            await interaction.response.send_message(
+                f"**Vehicle:** `{vehicle}` isn't in the vehicle list — use the autocomplete to search by name or manufacturer.",
+                ephemeral=True,
+            )
             return
 
         ext = Path(screenshot.filename).suffix.lower()
         if ext not in _IMAGE_EXTENSIONS:
             await interaction.response.send_message(
-                "Screenshot must be a jpg, png, or webp image.", ephemeral=True
+                f"**Screenshot:** `{screenshot.filename}` isn't a supported file type — attach a `.jpg`, `.png`, or `.webp` image.",
+                ephemeral=True,
             )
             return
 
@@ -61,25 +76,25 @@ class SubmissionCog(commands.Cog):
         filename = f"{interaction.user.id}_{int(discord.utils.utcnow().timestamp())}{ext}"
         dest = config.SCREENSHOTS_DIR / filename
 
-        async with aiohttp.ClientSession() as session:
-            async with session.get(screenshot.url) as resp:
-                if resp.status != 200:
-                    await interaction.followup.send(
-                        "Failed to download screenshot — please try again.", ephemeral=True
-                    )
-                    return
-                try:
-                    data = await resp.content.read(10 * 1024 * 1024)  # 10 MB cap
-                    dest.write_bytes(data)
-                except OSError as exc:
-                    await interaction.followup.send(
-                        "Failed to save screenshot — please try again.", ephemeral=True
-                    )
-                    return
+        http_session = self.bot.http_session  # type: ignore[attr-defined]
+        async with http_session.get(screenshot.url) as resp:
+            if resp.status != 200:
+                await interaction.followup.send(
+                    "Failed to download screenshot — please try again.", ephemeral=True
+                )
+                return
+            try:
+                data = await resp.content.read(10 * 1024 * 1024)  # 10 MB cap
+                dest.write_bytes(data)
+            except OSError:
+                await interaction.followup.send(
+                    "Failed to save screenshot — please try again.", ephemeral=True
+                )
+                return
 
         entry_id = add_entry(
             discord_id=str(interaction.user.id),
-            username=interaction.user.display_name,
+            username=interaction.user.name,
             track=track,
             vehicle=vehicle,
             class_=class_,

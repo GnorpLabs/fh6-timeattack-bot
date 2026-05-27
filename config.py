@@ -12,15 +12,13 @@ DB_PATH: Path = Path(os.getenv("DB_PATH", "data/timeattack.db"))
 SCREENSHOTS_DIR: Path = Path(os.getenv("SCREENSHOTS_DIR", "screenshots"))
 
 TRACKS: list[str] = [
-    # Replace with actual FH6 time attack track names
-    "Horizon Circuit",
-    "Goliath",
-    "Colossus",
-    "Gauntlet",
-    "Marathon",
+    "Legend island",
+    "Hokubu Circuit",
+    "Soni Circuit",
+    "Sekibe Circuit",
 ]
 
-CLASSES: list[str] = ["D", "C", "B", "A", "S1", "S2", "X"]
+CLASSES: list[str] = ["D", "C", "B", "A", "S1", "S2", "R", "X"]
 
 VEHICLES: list[dict] = []
 

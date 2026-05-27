@@ -2,14 +2,15 @@ import re
 
 
 def parse_lap_time(time_str: str) -> int:
-    m = re.fullmatch(r"(\d+):(\d{2})\.(\d{3})", time_str.strip())
+    m = re.fullmatch(r"(?:(\d+):)?(\d{2})\.(\d{3})", time_str.strip())
     if not m:
         raise ValueError(
-            f"Invalid time format '{time_str.strip()}'. Use mm:ss.ms (e.g. 1:23.456)"
+            f"`{time_str.strip()}` isn't a valid time — use `mm:ss.ms` (e.g. `1:23.456`) or `ss.ms` for sub-minute laps (e.g. `58.120`)"
         )
-    minutes, seconds, millis = int(m.group(1)), int(m.group(2)), int(m.group(3))
+    minutes = int(m.group(1)) if m.group(1) is not None else 0
+    seconds, millis = int(m.group(2)), int(m.group(3))
     if seconds >= 60:
-        raise ValueError(f"Seconds must be 0-59, got {seconds}")
+        raise ValueError(f"`{seconds}` seconds is out of range — seconds must be between 0 and 59")
     return minutes * 60_000 + seconds * 1_000 + millis
 
 
