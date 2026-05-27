@@ -12,18 +12,64 @@ from session_manager import SessionManager
 
 log = relay_logger.log
 
-# Timing fields we watch for immediate change-logging (excludes high-freq fields
-# like CurrentLap/CurrentRaceTime which change every packet).
-_WATCH_FIELDS = ("BestLap", "LastLap", "LapNumber")
+# All 89 fields grouped by category for the periodic dump.
+# Every field returned by parse_all_fields() appears exactly once.
+_TELEM_GROUPS: list[tuple[str, tuple[str, ...]]] = [
+    ("sled/motion", (
+        "IsRaceOn", "TimestampMS",
+        "AccelX", "AccelY", "AccelZ",
+        "VelocityX", "VelocityY", "VelocityZ",
+        "AngularVelX", "AngularVelY", "AngularVelZ",
+        "Yaw", "Pitch", "Roll",
+    )),
+    ("sled/suspension", (
+        "SuspNormFL", "SuspNormFR", "SuspNormRL", "SuspNormRR",
+        "SuspTravelMetersFL", "SuspTravelMetersFR", "SuspTravelMetersRL", "SuspTravelMetersRR",
+    )),
+    ("sled/tires", (
+        "TireSlipRatioFL", "TireSlipRatioFR", "TireSlipRatioRL", "TireSlipRatioRR",
+        "TireSlipAngleFL", "TireSlipAngleFR", "TireSlipAngleRL", "TireSlipAngleRR",
+        "TireCombinedSlipFL", "TireCombinedSlipFR", "TireCombinedSlipRL", "TireCombinedSlipRR",
+        "WheelRotSpeedFL", "WheelRotSpeedFR", "WheelRotSpeedRL", "WheelRotSpeedRR",
+        "WheelOnRumbleFL", "WheelOnRumbleFR", "WheelOnRumbleRL", "WheelOnRumbleRR",
+        "PuddleDepthFL", "PuddleDepthFR", "PuddleDepthRL", "PuddleDepthRR",
+        "SurfaceRumbleFL", "SurfaceRumbleFR", "SurfaceRumbleRL", "SurfaceRumbleRR",
+    )),
+    ("sled/engine", (
+        "EngineMaxRpm", "EngineIdleRpm", "CurrentEngineRpm",
+        "DrivetrainType", "NumCylinders",
+        "CarOrdinal", "CarClass", "CarPI",
+    )),
+    ("dash/position", (
+        "PositionX", "PositionY", "PositionZ",
+    )),
+    ("dash/performance", (
+        "Speed", "Power", "Torque", "Boost", "Fuel", "DistanceTraveled",
+    )),
+    ("dash/tires", (
+        "TireTempFL", "TireTempFR", "TireTempRL", "TireTempRR",
+    )),
+    ("dash/timing", (
+        "BestLap", "LastLap", "CurrentLap", "CurrentRaceTime",
+        "LapNumber", "RacePosition",
+    )),
+    ("dash/driver", (
+        "Accel", "Brake", "Clutch", "HandBrake", "Gear", "Steer",
+        "NormDrivingLine", "NormAIBrakeDiff",
+    )),
+    ("dash/unknown", (
+        "Unk_284", "Unk_288", "Unk_292", "Unk_323",
+    )),
+]
 
-# Snapshot fields included in the periodic 5-second telemetry dump.
-_DUMP_FIELDS = (
-    "IsRaceOn", "CurrentEngineRpm", "Speed", "Gear", "Fuel",
-    "TireTempFL", "TireTempFR", "TireTempRL", "TireTempRR",
-    "BestLap", "LastLap", "CurrentLap", "CurrentRaceTime",
-    "LapNumber", "RacePosition", "Accel", "Brake",
-    "CarOrdinal", "CarClass", "CarPI",
-    "Unk_284", "Unk_288", "Unk_292",
+# Discrete-value fields — log immediately on any change.
+# Omits continuously-varying physics fields (Speed, RPM, positions, etc.)
+# which are captured by the periodic dump.
+_WATCH_FIELDS = (
+    "BestLap", "LastLap", "LapNumber", "RacePosition",
+    "CarOrdinal", "CarClass", "CarPI", "DrivetrainType", "NumCylinders",
+    "Gear",
+    "Unk_284", "Unk_288", "Unk_292", "Unk_323",
 )
 
 
@@ -49,7 +95,7 @@ async def _async_main(app: App, port: int, stats: DebugStats) -> None:
         if not fields or fields.get("IsRaceOn") != 1:
             return
 
-        # Log immediately when BestLap, LastLap, or LapNumber changes.
+        # Log immediately when any discrete-value field changes.
         prev = _telem["prev"]
         for key in _WATCH_FIELDS:
             val = fields[key]
@@ -58,15 +104,16 @@ async def _async_main(app: App, port: int, stats: DebugStats) -> None:
                          f"{val:.4f}" if isinstance(val, float) else val)
                 prev[key] = val
 
-        # Periodic full snapshot every 5 seconds.
+        # Periodic full dump every 5 seconds — all 89 fields, one line per group.
         now = time.monotonic()
         if now - _telem["last_dump"] >= 5.0:
             _telem["last_dump"] = now
-            parts = []
-            for k in _DUMP_FIELDS:
-                v = fields[k]
-                parts.append(f"{k}={v:.3f}" if isinstance(v, float) else f"{k}={v}")
-            log.info("TELEMETRY  %s", "  ".join(parts))
+            for group, keys in _TELEM_GROUPS:
+                parts = []
+                for k in keys:
+                    v = fields[k]
+                    parts.append(f"{k}={v:.3f}" if isinstance(v, float) else f"{k}={v}")
+                log.info("TELEMETRY[%s]  %s", group, "  ".join(parts))
 
     def on_packet(packet) -> None:
         with stats._lock:
