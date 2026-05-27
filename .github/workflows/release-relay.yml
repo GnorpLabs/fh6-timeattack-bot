@@ -17,7 +17,7 @@ jobs:
       packages: read
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
       - name: Install test dependencies
         working-directory: fh6-relay
@@ -42,7 +42,7 @@ jobs:
       packages: read
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
       - name: Install Python dependencies (Windows target)
         working-directory: fh6-relay
@@ -60,7 +60,7 @@ jobs:
         run: test -f fh6-relay/dist/fh6-relay.exe
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
         with:
           name: fh6-relay ${{ github.ref_name }}
           body: |
