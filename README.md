@@ -1,6 +1,6 @@
 # FH6 Time Attack Bot
 
-A Discord bot for tracking and leaderboarding Forza Horizon 6 time attack lap times. Players submit times with a screenshot proof, and the bot stores them in a SQLite database with per-track, per-class leaderboards.
+A Discord bot for tracking and leaderboarding Forza Horizon 6 time attack lap times. Players submit times manually with a screenshot, or automatically via the **Data Out** telemetry feature using `fh6-relay.exe`.
 
 ## Commands
 
@@ -11,6 +11,8 @@ A Discord bot for tracking and leaderboarding Forza Horizon 6 time attack lap ti
 | `/my-times` | View all of your personal submitted times |
 | `/history` | View the full submission history for a track |
 | `/delete` | Delete one of your own entries by ID |
+| `/dataout-register` | Generate an API token for use with `fh6-relay.exe` (auto-submit) |
+| `/dataout-refresh` | Regenerate your token (invalidates the old one immediately) |
 
 ---
 
@@ -49,6 +51,7 @@ DISCORD_TOKEN=your_bot_token_here
 DISCORD_GUILD_ID=your_server_id_here   # Right-click server icon → Copy Server ID (requires Developer Mode)
 DB_PATH=data/timeattack.db
 SCREENSHOTS_DIR=screenshots
+API_PORT=8080                           # HTTP port for the Data Out relay API (default: 8080)
 ```
 
 To get your server ID: enable **Developer Mode** in Discord (User Settings → Advanced → Developer Mode), then right-click your server icon and select **Copy Server ID**.
@@ -94,9 +97,72 @@ Database initialised
 Loaded cog: cogs.submission
 Loaded cog: cogs.query
 Loaded cog: cogs.admin
+Loaded cog: cogs.telemetry
 Logged in as YourBot#0000 (ID: ...)
 Slash commands synced to guild 123456789
 ```
+
+---
+
+## Data Out Auto-Submit
+
+Instead of manually typing your time into Discord, you can use **`fh6-relay.exe`** — a lightweight Windows tray app that listens to FH6's telemetry stream and lets you submit a lap with one click.
+
+### How it works
+
+```
+FH6 Game  ──UDP──►  fh6-relay.exe  ──HTTPS──►  Bot server  ──►  Discord DM
+(localhost)          (your PC)                   (this bot)
+```
+
+FH6 sends telemetry to `127.0.0.1:20440`. The relay captures lap completions silently in the background. When you're done driving, open the Session Review window from the tray icon, pick your track + vehicle, select the lap you want to submit, and click **Submit**. The bot validates your token and posts the entry — you get a Discord DM confirmation identical to a `/submit` response.
+
+Screenshots are optional for auto-submitted entries.
+
+### Setup (players)
+
+**1. Configure FH6 Data Out**
+
+In Forza Horizon 6: Settings → HUD and Gameplay → scroll to **Data Out** → enable it with:
+- IP: `127.0.0.1`
+- Port: `20440`
+- Data format: Car Dash
+
+**2. Get your token**
+
+Run `/dataout-register` in any channel the bot can see. It will reply **privately** (ephemeral) with a 64-character token and setup instructions. Tokens expire after 30 days — run `/dataout-refresh` to get a new one.
+
+**3. Download and run `fh6-relay.exe`**
+
+Download the latest release from the GitHub Releases page. Run it — on first launch a setup dialog appears asking for:
+
+| Field | What to enter |
+|---|---|
+| **Server IP or FQDN** | IP address or hostname of the bot server (ask your server admin) |
+| **Discord User ID** | Your numeric Discord ID — enable Developer Mode (User Settings → Advanced), then right-click your profile → **Copy User ID** |
+| **Discord Username** | Your Discord username (e.g. `alice`) |
+| **Token** | The token from `/dataout-register` |
+
+These are saved to `%APPDATA%\FH6BotRelay\config.json` and won't be asked again unless you open Settings.
+
+**4. Drive and submit**
+
+The tray icon appears. Drive laps — each completed lap shows a brief tray notification. When ready to submit:
+
+1. Click the tray icon → **Session Review**
+2. Choose your track and vehicle from the dropdowns
+3. Select a lap row in the table
+4. Click **Submit Selected Lap**
+
+You'll receive a Discord DM confirming the entry. Use **Clear Session** to reset the lap list between outings.
+
+### Setup (server admins)
+
+The bot listens for relay submissions on `API_PORT` (default `8080`). Make this port reachable from players' machines:
+
+- **Firewall:** open TCP `8080` (or your chosen port) inbound
+- **Reverse proxy (recommended):** proxy `https://your-domain.com` → `localhost:8080` so players use a clean FQDN with valid TLS
+- **Kubernetes:** expose the API port via a Service alongside the existing bot deployment; see `helm/values.yaml`
 
 ---
 
@@ -140,3 +206,22 @@ Locally in the `screenshots/` directory (or the path set by `SCREENSHOTS_DIR` in
 **Can I run multiple instances of the bot?**
 
 No — multiple instances will conflict over the SQLite database. SQLite supports only one writer at a time and the file is not safe for concurrent access across processes.
+
+**`fh6-relay.exe` says "Token Expired".**
+
+Your token is valid for 30 days. Run `/dataout-refresh` in Discord, copy the new token, then open the relay's tray icon → **Settings** and paste it into the Token field.
+
+**`fh6-relay.exe` says "Connection Refused".**
+
+The bot server's API port is not reachable. Check that:
+- The server address you entered (without `https://`) is correct and reachable from your network.
+- Port `8080` (or your admin's custom port) is open in the server firewall.
+- The bot is running — check with your server admin.
+
+**Laps aren't being captured by the relay.**
+
+Verify FH6 Data Out is enabled: Settings → HUD and Gameplay → Data Out. IP must be `127.0.0.1`, Port `20440`, format `Car Dash`. The relay only records laps while `IsRaceOn` is active, so laps driven in the menus or during loading are ignored. Check the tray icon — if it shows an error state, restart the exe.
+
+**The relay captures a lap but submission fails with a validation error.**
+
+The track name or vehicle name you typed doesn't match the bot's list. Use the autocomplete dropdowns in the Session Review window — they are populated from the bot on window open. If they're empty (server unreachable), type the exact name as it appears in `/submit` autocomplete.
