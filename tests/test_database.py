@@ -1,4 +1,5 @@
 import pytest
+import config
 import database
 
 
@@ -135,3 +136,57 @@ def test_get_history_filtered_by_class(fresh_db):
     entries = database.get_history("Horizon Circuit", "S1")
     assert len(entries) == 1
     assert entries[0]["class"] == "S1"
+
+
+def test_add_entry_screenshot_is_optional(fresh_db):
+    entry_id = database.add_entry("111", "Alice", "Hokubu Circuit", "2024 Toyota GR86", "A", 83456)
+    entry = database.get_entry(entry_id)
+    assert entry["screenshot_path"] is None
+
+
+def test_add_entry_default_source_is_manual(fresh_db):
+    entry_id = database.add_entry("111", "Alice", "Hokubu Circuit", "2024 Toyota GR86", "A", 83456)
+    entry = database.get_entry(entry_id)
+    assert entry["source"] == "manual"
+
+
+def test_add_entry_telemetry_source_and_raw_telemetry(fresh_db):
+    entry_id = database.add_entry(
+        "111", "Alice", "Hokubu Circuit", "2024 Toyota GR86", "A", 83456,
+        source="telemetry", raw_telemetry='{"lap_number": 3}',
+    )
+    entry = database.get_entry(entry_id)
+    assert entry["source"] == "telemetry"
+    assert entry["raw_telemetry"] == '{"lap_number": 3}'
+
+
+def test_init_db_migrates_old_schema(tmp_path, monkeypatch):
+    import sqlite3
+    db = tmp_path / "legacy.db"
+    conn = sqlite3.connect(db)
+    conn.execute("""
+        CREATE TABLE time_entries (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            discord_id TEXT NOT NULL, username TEXT NOT NULL,
+            track TEXT NOT NULL, vehicle TEXT NOT NULL, class TEXT NOT NULL,
+            lap_time_ms INTEGER NOT NULL, screenshot_path TEXT NOT NULL,
+            submitted_at TEXT NOT NULL
+        )
+    """)
+    conn.execute(
+        "INSERT INTO time_entries VALUES (1,'1','Alice','T','V','A',1000,'s.png','2026-01-01')"
+    )
+    conn.commit()
+    conn.close()
+
+    monkeypatch.setattr(config, "DB_PATH", db)
+    database.init_db()
+
+    conn = sqlite3.connect(db)
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(time_entries)")}
+    rows = conn.execute("SELECT source, raw_telemetry FROM time_entries").fetchall()
+    conn.close()
+
+    assert "source" in cols
+    assert "raw_telemetry" in cols
+    assert rows[0] == ("manual", None)

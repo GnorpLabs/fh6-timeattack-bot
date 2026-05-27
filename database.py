@@ -1,5 +1,7 @@
+import hashlib
+import secrets
 import sqlite3
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 import config
@@ -24,12 +26,55 @@ def init_db() -> None:
                     vehicle          TEXT    NOT NULL,
                     class            TEXT    NOT NULL,
                     lap_time_ms      INTEGER NOT NULL,
-                    screenshot_path  TEXT    NOT NULL,
-                    submitted_at     TEXT    NOT NULL
+                    screenshot_path  TEXT,
+                    submitted_at     TEXT    NOT NULL,
+                    source           TEXT    NOT NULL DEFAULT 'manual',
+                    raw_telemetry    TEXT
+                )
+            """)
+            _migrate_time_entries_if_needed(conn)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS tokens (
+                    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                    discord_id   TEXT NOT NULL UNIQUE,
+                    token_hash   TEXT NOT NULL,
+                    expires_at   TEXT NOT NULL
                 )
             """)
     finally:
         conn.close()
+
+
+def _migrate_time_entries_if_needed(conn: sqlite3.Connection) -> None:
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(time_entries)")}
+    if "source" in cols:
+        return
+    conn.execute("DROP TABLE IF EXISTS time_entries_v2")
+    conn.execute("""
+        CREATE TABLE time_entries_v2 (
+            id               INTEGER PRIMARY KEY AUTOINCREMENT,
+            discord_id       TEXT    NOT NULL,
+            username         TEXT    NOT NULL,
+            track            TEXT    NOT NULL,
+            vehicle          TEXT    NOT NULL,
+            class            TEXT    NOT NULL,
+            lap_time_ms      INTEGER NOT NULL,
+            screenshot_path  TEXT,
+            submitted_at     TEXT    NOT NULL,
+            source           TEXT    NOT NULL DEFAULT 'manual',
+            raw_telemetry    TEXT
+        )
+    """)
+    conn.execute("""
+        INSERT INTO time_entries_v2
+            (id, discord_id, username, track, vehicle, class,
+             lap_time_ms, screenshot_path, submitted_at)
+        SELECT id, discord_id, username, track, vehicle, class,
+               lap_time_ms, screenshot_path, submitted_at
+        FROM time_entries
+    """)
+    conn.execute("DROP TABLE time_entries")
+    conn.execute("ALTER TABLE time_entries_v2 RENAME TO time_entries")
 
 
 def add_entry(
@@ -39,7 +84,9 @@ def add_entry(
     vehicle: str,
     class_: str,
     lap_time_ms: int,
-    screenshot_path: str,
+    screenshot_path: str | None = None,
+    source: str = "manual",
+    raw_telemetry: str | None = None,
 ) -> int:
     submitted_at = datetime.now(timezone.utc).isoformat()
     conn = _connect()
@@ -47,9 +94,11 @@ def add_entry(
         with conn:
             cur = conn.execute(
                 """INSERT INTO time_entries
-                   (discord_id, username, track, vehicle, class, lap_time_ms, screenshot_path, submitted_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-                (discord_id, username, track, vehicle, class_, lap_time_ms, screenshot_path, submitted_at),
+                   (discord_id, username, track, vehicle, class, lap_time_ms,
+                    screenshot_path, submitted_at, source, raw_telemetry)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (discord_id, username, track, vehicle, class_, lap_time_ms,
+                 screenshot_path, submitted_at, source, raw_telemetry),
             )
             return cur.lastrowid
     finally:
