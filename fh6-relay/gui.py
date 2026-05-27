@@ -124,7 +124,7 @@ class App:
             )
             try:
                 result = future.result(timeout=10)
-                status_var.set(f"Submitted! Entry #{result['entry_id']} — check Discord for confirmation.")
+                status_var.set(f"Submitted! Entry #{result.get('entry_id', '?')} — check Discord for confirmation.")
             except ValueError as exc:
                 reason = str(exc)
                 if "token_expired" in reason:
