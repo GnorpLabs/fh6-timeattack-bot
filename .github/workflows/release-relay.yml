@@ -72,6 +72,9 @@ jobs:
       - name: Verify exe was produced
         run: test -f fh6-relay/dist/fh6-relay.exe
 
+      - name: Zip exe for release
+        run: zip -j fh6-relay/dist/fh6-relay.zip fh6-relay/dist/fh6-relay.exe
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
         with:
@@ -83,10 +86,10 @@ jobs:
 
             ### Setup
             1. Run `/dataout-register` in Discord to get your token.
-            2. Download `fh6-relay.exe` below and run it.
+            2. Download `fh6-relay.zip` below, extract it, and run `fh6-relay.exe`.
             3. Fill in the first-launch setup dialog (server address, Discord User ID, username, token).
             4. Configure FH6 Data Out → `127.0.0.1:20440`.
 
             See the [README](https://github.com/${{ github.repository }}#data-out-auto-submit) for full instructions.
-          files: fh6-relay/dist/fh6-relay.exe
+          files: fh6-relay/dist/fh6-relay.zip
           generate_release_notes: false
