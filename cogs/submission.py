@@ -40,6 +40,14 @@ class SubmissionCog(commands.Cog):
             await interaction.response.send_message(str(exc), ephemeral=True)
             return
 
+        if track not in config.TRACKS:
+            await interaction.response.send_message("Unknown track. Use the autocomplete list.", ephemeral=True)
+            return
+
+        if class_ not in config.CLASSES:
+            await interaction.response.send_message("Unknown class. Use the autocomplete list.", ephemeral=True)
+            return
+
         ext = Path(screenshot.filename).suffix.lower()
         if ext not in _IMAGE_EXTENSIONS:
             await interaction.response.send_message(
@@ -61,7 +69,8 @@ class SubmissionCog(commands.Cog):
                     )
                     return
                 try:
-                    dest.write_bytes(await resp.read())
+                    data = await resp.content.read(10 * 1024 * 1024)  # 10 MB cap
+                    dest.write_bytes(data)
                 except OSError as exc:
                     await interaction.followup.send(
                         "Failed to save screenshot — please try again.", ephemeral=True

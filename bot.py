@@ -40,6 +40,9 @@ async def main() -> None:
     init_db()
     log.info("Database initialised")
 
+    if not config.DISCORD_TOKEN:
+        raise RuntimeError("DISCORD_TOKEN is not set — check your .env file")
+
     intents = discord.Intents.default()
     bot = commands.Bot(command_prefix="!", intents=intents)
 

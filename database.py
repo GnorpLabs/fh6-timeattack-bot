@@ -93,7 +93,6 @@ def get_leaderboard(track: str, class_: Optional[str] = None) -> list[dict]:
                    ) best ON e.class = best.class
                              AND e.lap_time_ms = best.min_time
                              AND e.track = ?
-                   GROUP BY e.class
                    ORDER BY e.class, e.lap_time_ms ASC""",
                 (track, track),
             ).fetchall()
