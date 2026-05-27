@@ -190,3 +190,24 @@ def test_init_db_migrates_old_schema(tmp_path, monkeypatch):
     assert "source" in cols
     assert "raw_telemetry" in cols
     assert rows[0] == ("manual", None)
+
+    # screenshot_path should be nullable after migration
+    conn = sqlite3.connect(db)
+    # Insert a row with NULL screenshot_path to verify nullable
+    conn.execute(
+        "INSERT INTO time_entries (discord_id, username, track, vehicle, class, lap_time_ms, submitted_at, source) "
+        "VALUES ('2', 'Bob', 'T', 'V', 'A', 2000, '2026-01-02', 'manual')"
+    )
+    conn.commit()
+    row = conn.execute("SELECT screenshot_path FROM time_entries WHERE discord_id='2'").fetchone()
+    conn.close()
+    assert row[0] is None
+
+
+def test_init_db_is_idempotent(fresh_db):
+    # fresh_db already called init_db() once
+    entry_id = database.add_entry("111", "Alice", "Hokubu Circuit", "2024 Toyota GR86", "A", 83456)
+    database.init_db()  # call again
+    entry = database.get_entry(entry_id)
+    assert entry is not None
+    assert entry["discord_id"] == "111"

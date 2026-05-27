@@ -17,21 +17,6 @@ def init_db() -> None:
     conn = _connect()
     try:
         with conn:
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS time_entries (
-                    id               INTEGER PRIMARY KEY AUTOINCREMENT,
-                    discord_id       TEXT    NOT NULL,
-                    username         TEXT    NOT NULL,
-                    track            TEXT    NOT NULL,
-                    vehicle          TEXT    NOT NULL,
-                    class            TEXT    NOT NULL,
-                    lap_time_ms      INTEGER NOT NULL,
-                    screenshot_path  TEXT,
-                    submitted_at     TEXT    NOT NULL,
-                    source           TEXT    NOT NULL DEFAULT 'manual',
-                    raw_telemetry    TEXT
-                )
-            """)
             _migrate_time_entries_if_needed(conn)
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS tokens (
@@ -46,9 +31,33 @@ def init_db() -> None:
 
 
 def _migrate_time_entries_if_needed(conn: sqlite3.Connection) -> None:
-    cols = {row[1] for row in conn.execute("PRAGMA table_info(time_entries)")}
-    if "source" in cols:
+    table_exists = conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='time_entries'"
+    ).fetchone() is not None
+
+    if not table_exists:
+        conn.execute("DROP TABLE IF EXISTS time_entries_v2")
+        conn.execute("""
+            CREATE TABLE time_entries (
+                id               INTEGER PRIMARY KEY AUTOINCREMENT,
+                discord_id       TEXT    NOT NULL,
+                username         TEXT    NOT NULL,
+                track            TEXT    NOT NULL,
+                vehicle          TEXT    NOT NULL,
+                class            TEXT    NOT NULL,
+                lap_time_ms      INTEGER NOT NULL,
+                screenshot_path  TEXT,
+                submitted_at     TEXT    NOT NULL,
+                source           TEXT    NOT NULL DEFAULT 'manual',
+                raw_telemetry    TEXT
+            )
+        """)
         return
+
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(time_entries)")}
+    if "source" in cols and "raw_telemetry" in cols:
+        return
+
     conn.execute("DROP TABLE IF EXISTS time_entries_v2")
     conn.execute("""
         CREATE TABLE time_entries_v2 (
