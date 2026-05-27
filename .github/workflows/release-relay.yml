@@ -62,13 +62,12 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
       - name: Build fh6-relay.exe via Wine + PyInstaller
-        # batonogov/pyinstaller-windows auto-runs `pip install -r requirements.txt`
-        # then `pyinstaller <CMD>`. Just pass the spec file as CMD.
+        # No CMD: entrypoint auto-discovers *.spec in /src, runs pip install, then
+        # pyinstaller --clean -y --dist ./dist --workpath /tmp <spec>
         run: |
           docker run --rm \
             -v "${{ github.workspace }}/fh6-relay:/src" \
-            batonogov/pyinstaller-windows:latest \
-            build.spec
+            batonogov/pyinstaller-windows:latest
 
       - name: Verify exe was produced
         run: test -f fh6-relay/dist/fh6-relay.exe
