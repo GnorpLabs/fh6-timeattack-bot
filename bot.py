@@ -24,6 +24,7 @@ COGS = [
     "cogs.submission",
     "cogs.query",
     "cogs.admin",
+    "cogs.telemetry",
 ]
 
 
@@ -32,6 +33,7 @@ class TimeAttackBot(commands.Bot):
         intents = discord.Intents.default()
         super().__init__(command_prefix=commands.when_mentioned, intents=intents)
         self.http_session: aiohttp.ClientSession | None = None
+        self._api_runner: aiohttp.web.AppRunner | None = None
 
     async def setup_hook(self) -> None:
         self.http_session = aiohttp.ClientSession()
@@ -50,6 +52,15 @@ class TimeAttackBot(commands.Bot):
             await self.tree.sync()
             log.info("Slash commands synced globally")
 
+        import api_server
+        from aiohttp import web as aiohttp_web
+        _app = api_server.create_app(self)
+        self._api_runner = aiohttp_web.AppRunner(_app)
+        await self._api_runner.setup()
+        site = aiohttp_web.TCPSite(self._api_runner, "0.0.0.0", config.API_PORT)
+        await site.start()
+        log.info(f"API server listening on port {config.API_PORT}")
+
         @self.tree.error
         async def on_app_command_error(
             interaction: discord.Interaction, error: app_commands.AppCommandError
@@ -62,6 +73,8 @@ class TimeAttackBot(commands.Bot):
                 await interaction.response.send_message(msg, ephemeral=True)
 
     async def close(self) -> None:
+        if self._api_runner:
+            await self._api_runner.cleanup()
         if self.http_session:
             await self.http_session.close()
         await super().close()
