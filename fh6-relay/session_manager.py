@@ -1,4 +1,5 @@
-from dataclasses import dataclass, field
+import threading
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -17,6 +18,7 @@ class LapRecord:
 
 class SessionManager:
     def __init__(self) -> None:
+        self._lock = threading.Lock()
         self.laps: list[LapRecord] = []
         self._prev_lap_number: Optional[int] = None
 
@@ -30,6 +32,9 @@ class SessionManager:
             return None
 
         if packet.lap_number > self._prev_lap_number:
+            if packet.last_lap <= 0:
+                self._prev_lap_number = packet.lap_number
+                return None
             lap = LapRecord(
                 lap_number=packet.lap_number,
                 lap_time_ms=round(packet.last_lap * 1000),
@@ -38,7 +43,8 @@ class SessionManager:
                 raw_telemetry=_packet_to_dict(packet),
                 captured_at=datetime.now(timezone.utc).isoformat(),
             )
-            self.laps.append(lap)
+            with self._lock:
+                self.laps.append(lap)
             self._prev_lap_number = packet.lap_number
             return lap
 
@@ -46,8 +52,13 @@ class SessionManager:
         return None
 
     def reset(self) -> None:
-        self.laps.clear()
+        with self._lock:
+            self.laps.clear()
         self._prev_lap_number = None
+
+    def get_laps_snapshot(self) -> list[LapRecord]:
+        with self._lock:
+            return list(self.laps)
 
 
 def _packet_to_dict(packet: FH6Packet) -> dict:

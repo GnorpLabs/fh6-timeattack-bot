@@ -1,5 +1,3 @@
-import struct
-from dataclasses import asdict
 import packet_parser
 import session_manager
 
@@ -90,3 +88,21 @@ def test_reset_clears_laps_and_state():
     # After reset, first packet should not trigger a lap
     result = sm.on_packet(_make_packet(lap_number=3))
     assert result is None
+
+
+def test_zero_last_lap_is_ignored():
+    sm = session_manager.SessionManager()
+    sm.on_packet(_make_packet(lap_number=1))
+    result = sm.on_packet(_make_packet(lap_number=2, last_lap=0.0))
+    assert result is None
+    assert sm.laps == []
+
+
+def test_get_laps_snapshot_returns_copy():
+    sm = session_manager.SessionManager()
+    sm.on_packet(_make_packet(lap_number=1))
+    sm.on_packet(_make_packet(lap_number=2))
+    snapshot = sm.get_laps_snapshot()
+    assert len(snapshot) == 1
+    sm.reset()
+    assert len(snapshot) == 1  # snapshot is independent of internal list
