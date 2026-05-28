@@ -298,6 +298,101 @@ class SubmissionCog(commands.Cog):
 
         await interaction.followup.send(embed=embed)
 
+    @app_commands.command(name="submit", description="Submit a time attack lap time via screenshot")
+    @app_commands.describe(
+        track="Select a track from the list",
+        screenshot="Attach a screenshot of your result (.jpg, .png, or .webp)",
+    )
+    async def submit(
+        self,
+        interaction: discord.Interaction,
+        track: str,
+        screenshot: discord.Attachment,
+    ) -> None:
+        if track not in config.TRACKS:
+            await interaction.response.send_message(
+                f"**Track:** `{track}` isn't recognised — select a track from the autocomplete list.",
+                ephemeral=True,
+            )
+            return
+
+        ext = Path(screenshot.filename).suffix.lower()
+        if ext not in _IMAGE_EXTENSIONS:
+            await interaction.response.send_message(
+                f"**Screenshot:** `{screenshot.filename}` isn't a supported file type — attach a `.jpg`, `.png`, or `.webp` image.",
+                ephemeral=True,
+            )
+            return
+
+        await interaction.response.defer(ephemeral=True)
+
+        config.SCREENSHOTS_DIR.mkdir(parents=True, exist_ok=True)
+        filename = f"{interaction.user.id}_{int(discord.utils.utcnow().timestamp())}{ext}"
+        dest = config.SCREENSHOTS_DIR / filename
+
+        http_session = self.bot.http_session  # type: ignore[attr-defined]
+        async with http_session.get(screenshot.url) as resp:
+            if resp.status != 200:
+                await interaction.followup.send(
+                    "Failed to download screenshot — please try again.", ephemeral=True
+                )
+                return
+            try:
+                image_bytes = await resp.content.read(10 * 1024 * 1024)
+                dest.write_bytes(image_bytes)
+            except OSError:
+                await interaction.followup.send(
+                    "Failed to save screenshot — please try again.", ephemeral=True
+                )
+                return
+
+        from image_extractor import extract_from_image
+        result = extract_from_image(image_bytes)
+
+        all_present = all([
+            result.vehicle,
+            result.time_str,
+            result.class_,
+            result.global_rank is not None,
+        ])
+
+        embed = discord.Embed(
+            title="Screenshot analysed — please confirm",
+            color=discord.Color.blurple(),
+        )
+        embed.add_field(name="Track", value=track, inline=True)
+        embed.add_field(name="Vehicle", value=result.vehicle or "❌ Not detected", inline=True)
+        embed.add_field(name="Time", value=result.time_str or "❌ Not detected", inline=True)
+        embed.add_field(name="Class", value=result.class_ or "❌ Not detected", inline=True)
+        embed.add_field(
+            name="Global Rank",
+            value=f"#{result.global_rank:,}" if result.global_rank is not None else "❌ Not detected",
+            inline=True,
+        )
+        embed.set_thumbnail(url=screenshot.url)
+        if not all_present:
+            embed.set_footer(text="Some fields couldn't be read — click Edit to fill them in.")
+        else:
+            embed.set_footer(text="Does this look right?")
+
+        view = ConfirmView(
+            track=track,
+            screenshot_path=str(dest),
+            screenshot_url=screenshot.url,
+            result=result,
+        )
+        await interaction.followup.send(embed=embed, view=view, ephemeral=True)
+
+    @submit.autocomplete("track")
+    async def _submit_track_ac(
+        self, interaction: discord.Interaction, current: str
+    ) -> list[app_commands.Choice[str]]:
+        return [
+            app_commands.Choice(name=t, value=t)
+            for t in config.TRACKS
+            if current.lower() in t.lower()
+        ][:25]
+
     @submit_manual.autocomplete("track")
     async def _track_ac(self, interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
         return [
