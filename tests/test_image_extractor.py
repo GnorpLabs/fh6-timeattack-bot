@@ -93,3 +93,30 @@ def test_parse_vehicle_empty_list_returns_none():
 def test_parse_fields_returns_extraction_result_dataclass():
     result = _parse_fields("2024 Toyota GR86 Class A 1:23.456 #100", _VEHICLES)
     assert isinstance(result, ExtractionResult)
+
+
+from image_extractor import extract_from_image
+
+
+def test_extract_from_image_delegates_to_parse_fields(monkeypatch):
+    monkeypatch.setattr(
+        "image_extractor._ocr",
+        lambda data: "2024 Toyota GR86 A 1:23.456 #1234",
+    )
+    result = extract_from_image(b"fake", ["2024 Toyota GR86"])
+    assert result.time_str == "1:23.456"
+    assert result.class_ == "A"
+    assert result.global_rank == 1234
+    assert result.vehicle == "2024 Toyota GR86"
+
+
+def test_extract_from_image_returns_all_none_on_ocr_failure(monkeypatch):
+    def bad_ocr(_data):
+        raise RuntimeError("tesseract not found")
+
+    monkeypatch.setattr("image_extractor._ocr", bad_ocr)
+    result = extract_from_image(b"fake", [])
+    assert result.time_str is None
+    assert result.class_ is None
+    assert result.global_rank is None
+    assert result.vehicle is None

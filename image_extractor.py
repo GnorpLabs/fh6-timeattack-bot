@@ -67,3 +67,30 @@ def _parse_fields(raw_text: str, vehicle_names: list[str]) -> ExtractionResult:
         class_=_parse_class(raw_text),
         global_rank=_parse_rank(raw_text),
     )
+
+
+def _ocr(image_bytes: bytes) -> str:
+    import cv2
+    import numpy as np
+    import pytesseract
+
+    arr = np.frombuffer(image_bytes, dtype=np.uint8)
+    img = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+    enhanced = clahe.apply(gray)
+    _, thresh = cv2.threshold(enhanced, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    return pytesseract.image_to_string(thresh, config="--psm 6")
+
+
+def extract_from_image(
+    image_bytes: bytes,
+    vehicle_names: list[str] | None = None,
+) -> ExtractionResult:
+    if vehicle_names is None:
+        vehicle_names = config.get_vehicle_names()
+    try:
+        raw_text = _ocr(image_bytes)
+    except Exception:
+        raw_text = ""
+    return _parse_fields(raw_text, vehicle_names)
