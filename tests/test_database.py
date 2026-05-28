@@ -189,6 +189,7 @@ def test_init_db_migrates_old_schema(tmp_path, monkeypatch):
 
     assert "source" in cols
     assert "raw_telemetry" in cols
+    assert "global_rank" in cols
     assert rows[0] == ("manual", None)
 
     # screenshot_path should be nullable after migration
@@ -247,3 +248,51 @@ def test_get_token_row_expires_at_is_in_the_future(fresh_db):
     row = database.get_token_row(token)
     expires_at = datetime.fromisoformat(row["expires_at"])
     assert expires_at > datetime.now(timezone.utc)
+
+
+def test_add_entry_stores_global_rank(fresh_db):
+    entry_id = database.add_entry(
+        "111", "Alice", "Hokubu Circuit", "2024 Toyota GR86", "A", 83456,
+        global_rank=42,
+    )
+    entry = database.get_entry(entry_id)
+    assert entry["global_rank"] == 42
+
+
+def test_add_entry_global_rank_defaults_to_none(fresh_db):
+    entry_id = database.add_entry("111", "Alice", "Hokubu Circuit", "2024 Toyota GR86", "A", 83456)
+    entry = database.get_entry(entry_id)
+    assert entry["global_rank"] is None
+
+
+def test_init_db_migrates_missing_global_rank(tmp_path, monkeypatch):
+    import sqlite3
+    db = tmp_path / "no_rank.db"
+    conn = sqlite3.connect(db)
+    conn.execute("""
+        CREATE TABLE time_entries (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            discord_id TEXT NOT NULL, username TEXT NOT NULL,
+            track TEXT NOT NULL, vehicle TEXT NOT NULL, class TEXT NOT NULL,
+            lap_time_ms INTEGER NOT NULL, screenshot_path TEXT,
+            submitted_at TEXT NOT NULL,
+            source TEXT NOT NULL DEFAULT 'manual', raw_telemetry TEXT
+        )
+    """)
+    conn.execute(
+        "INSERT INTO time_entries (discord_id, username, track, vehicle, class, "
+        "lap_time_ms, submitted_at) VALUES ('1','Alice','T','V','A',1000,'2026-01-01')"
+    )
+    conn.commit()
+    conn.close()
+
+    monkeypatch.setattr(config, "DB_PATH", db)
+    database.init_db()
+
+    conn = sqlite3.connect(db)
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(time_entries)")}
+    row = conn.execute("SELECT global_rank FROM time_entries WHERE discord_id='1'").fetchone()
+    conn.close()
+
+    assert "global_rank" in cols
+    assert row[0] is None
