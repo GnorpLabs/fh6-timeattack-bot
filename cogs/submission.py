@@ -15,7 +15,7 @@ class SubmissionCog(commands.Cog):
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
 
-    @app_commands.command(name="submit", description="Submit a time attack lap time")
+    @app_commands.command(name="submit-manual", description="Submit a time attack lap time (manual entry)")
     @app_commands.describe(
         time="e.g. 1:23.456 or 58.120 for sub-minute laps",
         track="Select a track from the list",
@@ -24,7 +24,7 @@ class SubmissionCog(commands.Cog):
         screenshot="Attach a .jpg, .png, or .webp screenshot",
     )
     @app_commands.rename(class_="class")
-    async def submit(
+    async def submit_manual(
         self,
         interaction: discord.Interaction,
         time: str,
@@ -113,7 +113,7 @@ class SubmissionCog(commands.Cog):
 
         await interaction.followup.send(embed=embed)
 
-    @submit.autocomplete("track")
+    @submit_manual.autocomplete("track")
     async def _track_ac(self, interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
         return [
             app_commands.Choice(name=t, value=t)
@@ -121,7 +121,7 @@ class SubmissionCog(commands.Cog):
             if current.lower() in t.lower()
         ][:25]
 
-    @submit.autocomplete("class_")
+    @submit_manual.autocomplete("class_")
     async def _class_ac(self, interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
         return [
             app_commands.Choice(name=c, value=c)
@@ -129,7 +129,7 @@ class SubmissionCog(commands.Cog):
             if current.lower() in c.lower()
         ][:25]
 
-    @submit.autocomplete("vehicle")
+    @submit_manual.autocomplete("vehicle")
     async def _vehicle_ac(self, interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
         return [
             app_commands.Choice(name=v["name"], value=v["name"])
