@@ -6,9 +6,194 @@ from discord.ext import commands
 
 import config
 from database import add_entry
+from image_extractor import ExtractionResult
 from utils import format_lap_time, parse_lap_time
 
 _IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
+
+
+def _build_success_embed(
+    *,
+    track: str,
+    class_: str,
+    vehicle: str,
+    lap_ms: int,
+    entry_id: int,
+    rank: int | None,
+    screenshot_url: str | None,
+    username: str,
+) -> discord.Embed:
+    embed = discord.Embed(title="Time Attack Entry Recorded", color=discord.Color.green())
+    embed.add_field(name="Track", value=track, inline=True)
+    embed.add_field(name="Class", value=class_, inline=True)
+    embed.add_field(name="Vehicle", value=vehicle, inline=True)
+    embed.add_field(name="Lap Time", value=format_lap_time(lap_ms), inline=True)
+    embed.add_field(name="Entry ID", value=str(entry_id), inline=True)
+    if rank is not None:
+        embed.add_field(name="Global Rank", value=f"#{rank:,}", inline=True)
+    if screenshot_url:
+        embed.set_thumbnail(url=screenshot_url)
+    embed.set_footer(text=f"Submitted by {username}")
+    return embed
+
+
+class SubmissionModal(discord.ui.Modal, title="Submit Time Attack Entry"):
+    vehicle_input = discord.ui.TextInput(
+        label="Vehicle", max_length=200, required=True
+    )
+    time_input = discord.ui.TextInput(
+        label="Time (e.g. 1:23.456)", max_length=20, required=True
+    )
+    class_input = discord.ui.TextInput(
+        label="Class (D/C/B/A/S1/S2/R/X)", max_length=5, required=True
+    )
+    rank_input = discord.ui.TextInput(
+        label="Global Rank (optional)", required=False, max_length=10
+    )
+
+    def __init__(
+        self,
+        track: str,
+        screenshot_path: str,
+        screenshot_url: str,
+        prefill: ExtractionResult,
+    ) -> None:
+        super().__init__()
+        self._track = track
+        self._screenshot_path = screenshot_path
+        self._screenshot_url = screenshot_url
+        if prefill.vehicle:
+            self.vehicle_input.default = prefill.vehicle
+        if prefill.time_str:
+            self.time_input.default = prefill.time_str
+        if prefill.class_:
+            self.class_input.default = prefill.class_
+        if prefill.global_rank is not None:
+            self.rank_input.default = str(prefill.global_rank)
+
+    async def on_submit(self, interaction: discord.Interaction) -> None:
+        try:
+            lap_ms = parse_lap_time(self.time_input.value)
+        except ValueError as exc:
+            await interaction.response.send_message(f"**Time:** {exc}", ephemeral=True)
+            return
+
+        class_val = self.class_input.value.strip().upper()
+        if class_val not in config.CLASSES:
+            valid = ", ".join(f"`{c}`" for c in config.CLASSES)
+            await interaction.response.send_message(
+                f"**Class:** `{class_val}` isn't valid — choose from {valid}.",
+                ephemeral=True,
+            )
+            return
+
+        vehicle_val = self.vehicle_input.value.strip()
+        vehicle_names = config.get_vehicle_names()
+        if vehicle_names and vehicle_val not in vehicle_names:
+            await interaction.response.send_message(
+                f"**Vehicle:** `{vehicle_val}` isn't in the vehicle list — "
+                "check the spelling matches the autocomplete list.",
+                ephemeral=True,
+            )
+            return
+
+        rank: int | None = None
+        rank_str = self.rank_input.value.strip()
+        if rank_str:
+            try:
+                rank = int(rank_str.lstrip("#").replace(",", ""))
+            except ValueError:
+                await interaction.response.send_message(
+                    "**Global Rank:** must be a number (e.g. `1234`).",
+                    ephemeral=True,
+                )
+                return
+
+        entry_id = add_entry(
+            discord_id=str(interaction.user.id),
+            username=interaction.user.name,
+            track=self._track,
+            vehicle=vehicle_val,
+            class_=class_val,
+            lap_time_ms=lap_ms,
+            screenshot_path=self._screenshot_path or None,
+            global_rank=rank,
+        )
+
+        embed = _build_success_embed(
+            track=self._track,
+            class_=class_val,
+            vehicle=vehicle_val,
+            lap_ms=lap_ms,
+            entry_id=entry_id,
+            rank=rank,
+            screenshot_url=self._screenshot_url or None,
+            username=interaction.user.display_name,
+        )
+        await interaction.response.send_message(embed=embed)
+
+
+class ConfirmView(discord.ui.View):
+    def __init__(
+        self,
+        track: str,
+        screenshot_path: str,
+        screenshot_url: str,
+        result: ExtractionResult,
+    ) -> None:
+        super().__init__(timeout=300)
+        self._track = track
+        self._screenshot_path = screenshot_path
+        self._screenshot_url = screenshot_url
+        self._result = result
+        all_present = all([
+            result.vehicle,
+            result.time_str,
+            result.class_,
+            result.global_rank is not None,
+        ])
+        if not all_present:
+            self.remove_item(self.confirm_btn)
+
+    @discord.ui.button(label="Confirm ✓", style=discord.ButtonStyle.green)
+    async def confirm_btn(
+        self, interaction: discord.Interaction, button: discord.ui.Button
+    ) -> None:
+        lap_ms = parse_lap_time(self._result.time_str)
+        entry_id = add_entry(
+            discord_id=str(interaction.user.id),
+            username=interaction.user.name,
+            track=self._track,
+            vehicle=self._result.vehicle,
+            class_=self._result.class_,
+            lap_time_ms=lap_ms,
+            screenshot_path=self._screenshot_path or None,
+            global_rank=self._result.global_rank,
+        )
+        embed = _build_success_embed(
+            track=self._track,
+            class_=self._result.class_,
+            vehicle=self._result.vehicle,
+            lap_ms=lap_ms,
+            entry_id=entry_id,
+            rank=self._result.global_rank,
+            screenshot_url=self._screenshot_url or None,
+            username=interaction.user.display_name,
+        )
+        self.stop()
+        await interaction.response.edit_message(embed=embed, view=None)
+
+    @discord.ui.button(label="Edit ✏️", style=discord.ButtonStyle.secondary)
+    async def edit_btn(
+        self, interaction: discord.Interaction, button: discord.ui.Button
+    ) -> None:
+        modal = SubmissionModal(
+            track=self._track,
+            screenshot_path=self._screenshot_path,
+            screenshot_url=self._screenshot_url,
+            prefill=self._result,
+        )
+        await interaction.response.send_modal(modal)
 
 
 class SubmissionCog(commands.Cog):
