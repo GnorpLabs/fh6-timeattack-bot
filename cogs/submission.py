@@ -1,3 +1,5 @@
+import asyncio
+import re
 from pathlib import Path
 
 import discord
@@ -6,7 +8,7 @@ from discord.ext import commands
 
 import config
 from database import add_entry
-from image_extractor import ExtractionResult
+from image_extractor import ExtractionResult, extract_from_image
 from utils import format_lap_time, parse_lap_time
 
 _IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
@@ -20,6 +22,7 @@ def _build_success_embed(
     lap_ms: int,
     entry_id: int,
     rank: int | None,
+    rank_top_pct: float | None = None,
     screenshot_url: str | None,
     username: str,
 ) -> discord.Embed:
@@ -31,6 +34,8 @@ def _build_success_embed(
     embed.add_field(name="Entry ID", value=str(entry_id), inline=True)
     if rank is not None:
         embed.add_field(name="Global Rank", value=f"#{rank:,}", inline=True)
+    elif rank_top_pct is not None:
+        embed.add_field(name="Global Rank", value=f"Top {rank_top_pct:g}%", inline=True)
     if screenshot_url:
         embed.set_thumbnail(url=screenshot_url)
     embed.set_footer(text=f"Submitted by {username}")
@@ -56,20 +61,11 @@ class SubmissionModal(discord.ui.Modal, title="Submit Time Attack Entry"):
         track: str,
         screenshot_path: str,
         screenshot_url: str,
-        prefill: ExtractionResult,
     ) -> None:
         super().__init__()
         self._track = track
         self._screenshot_path = screenshot_path
         self._screenshot_url = screenshot_url
-        if prefill.vehicle:
-            self.vehicle_input.default = prefill.vehicle
-        if prefill.time_str:
-            self.time_input.default = prefill.time_str
-        if prefill.class_:
-            self.class_input.default = prefill.class_
-        if prefill.global_rank is not None:
-            self.rank_input.default = str(prefill.global_rank)
 
     async def on_submit(self, interaction: discord.Interaction) -> None:
         try:
@@ -98,16 +94,21 @@ class SubmissionModal(discord.ui.Modal, title="Submit Time Attack Entry"):
             return
 
         rank: int | None = None
+        rank_top_pct: float | None = None
         rank_str = self.rank_input.value.strip()
         if rank_str:
-            try:
-                rank = int(rank_str.lstrip("#").replace(",", ""))
-            except ValueError:
-                await interaction.response.send_message(
-                    "**Global Rank:** must be a number (e.g. `1234`).",
-                    ephemeral=True,
-                )
-                return
+            pct_m = re.match(r'^top\s+(\d+(?:\.\d+)?)\s*%$', rank_str, re.IGNORECASE)
+            if pct_m:
+                rank_top_pct = float(pct_m.group(1))
+            else:
+                try:
+                    rank = int(rank_str.lstrip("#").replace(",", ""))
+                except ValueError:
+                    await interaction.response.send_message(
+                        "**Global Rank:** must be a number (e.g. `1234`) or a top percentage (e.g. `Top 3%`).",
+                        ephemeral=True,
+                    )
+                    return
 
         entry_id = add_entry(
             discord_id=str(interaction.user.id),
@@ -118,6 +119,7 @@ class SubmissionModal(discord.ui.Modal, title="Submit Time Attack Entry"):
             lap_time_ms=lap_ms,
             screenshot_path=self._screenshot_path or None,
             global_rank=rank,
+            rank_top_pct=rank_top_pct,
         )
 
         embed = _build_success_embed(
@@ -127,6 +129,7 @@ class SubmissionModal(discord.ui.Modal, title="Submit Time Attack Entry"):
             lap_ms=lap_ms,
             entry_id=entry_id,
             rank=rank,
+            rank_top_pct=rank_top_pct,
             screenshot_url=self._screenshot_url or None,
             username=interaction.user.display_name,
         )
@@ -150,7 +153,7 @@ class ConfirmView(discord.ui.View):
             result.vehicle,
             result.time_str,
             result.class_,
-            result.global_rank is not None,
+            result.global_rank is not None or result.rank_top_pct is not None,
         ])
         if not all_present:
             self.remove_item(self.confirm_btn)
@@ -169,6 +172,7 @@ class ConfirmView(discord.ui.View):
             lap_time_ms=lap_ms,
             screenshot_path=self._screenshot_path or None,
             global_rank=self._result.global_rank,
+            rank_top_pct=self._result.rank_top_pct,
         )
         embed = _build_success_embed(
             track=self._track,
@@ -177,11 +181,13 @@ class ConfirmView(discord.ui.View):
             lap_ms=lap_ms,
             entry_id=entry_id,
             rank=self._result.global_rank,
+            rank_top_pct=self._result.rank_top_pct,
             screenshot_url=self._screenshot_url or None,
             username=interaction.user.display_name,
         )
         self.stop()
-        await interaction.response.edit_message(embed=embed, view=None)
+        await interaction.response.edit_message(content="✅ Entry recorded!", embed=None, view=None)
+        await interaction.followup.send(embed=embed)
 
     @discord.ui.button(label="Edit ✏️", style=discord.ButtonStyle.secondary)
     async def edit_btn(
@@ -191,7 +197,6 @@ class ConfirmView(discord.ui.View):
             track=self._track,
             screenshot_path=self._screenshot_path,
             screenshot_url=self._screenshot_url,
-            prefill=self._result,
         )
         await interaction.response.send_modal(modal)
 
@@ -268,8 +273,13 @@ class SubmissionCog(commands.Cog):
                     "Failed to download screenshot — please try again.", ephemeral=True
                 )
                 return
+            if resp.content_length and resp.content_length > 25 * 1024 * 1024:
+                await interaction.followup.send(
+                    "Screenshot is too large (max 25 MB).", ephemeral=True
+                )
+                return
             try:
-                data = await resp.content.read(10 * 1024 * 1024)  # 10 MB cap
+                data = await resp.read()
                 dest.write_bytes(data)
             except OSError:
                 await interaction.followup.send(
@@ -337,8 +347,13 @@ class SubmissionCog(commands.Cog):
                     "Failed to download screenshot — please try again.", ephemeral=True
                 )
                 return
+            if resp.content_length and resp.content_length > 25 * 1024 * 1024:
+                await interaction.followup.send(
+                    "Screenshot is too large (max 25 MB).", ephemeral=True
+                )
+                return
             try:
-                image_bytes = await resp.content.read(10 * 1024 * 1024)
+                image_bytes = await resp.read()
                 dest.write_bytes(image_bytes)
             except OSError:
                 await interaction.followup.send(
@@ -346,14 +361,13 @@ class SubmissionCog(commands.Cog):
                 )
                 return
 
-        from image_extractor import extract_from_image
-        result = extract_from_image(image_bytes)
+        result = await asyncio.to_thread(extract_from_image, image_bytes)
 
         all_present = all([
             result.vehicle,
             result.time_str,
             result.class_,
-            result.global_rank is not None,
+            result.global_rank is not None or result.rank_top_pct is not None,
         ])
 
         embed = discord.Embed(
@@ -364,11 +378,13 @@ class SubmissionCog(commands.Cog):
         embed.add_field(name="Vehicle", value=result.vehicle or "❌ Not detected", inline=True)
         embed.add_field(name="Time", value=result.time_str or "❌ Not detected", inline=True)
         embed.add_field(name="Class", value=result.class_ or "❌ Not detected", inline=True)
-        embed.add_field(
-            name="Global Rank",
-            value=f"#{result.global_rank:,}" if result.global_rank is not None else "❌ Not detected",
-            inline=True,
-        )
+        if result.global_rank is not None:
+            rank_display = f"#{result.global_rank:,}"
+        elif result.rank_top_pct is not None:
+            rank_display = f"Top {result.rank_top_pct:g}%"
+        else:
+            rank_display = "❌ Not detected"
+        embed.add_field(name="Global Rank", value=rank_display, inline=True)
         embed.set_thumbnail(url=screenshot.url)
         if not all_present:
             embed.set_footer(text="Some fields couldn't be read — click Edit to fill them in.")
@@ -384,15 +400,6 @@ class SubmissionCog(commands.Cog):
         await interaction.followup.send(embed=embed, view=view, ephemeral=True)
 
     @submit.autocomplete("track")
-    async def _submit_track_ac(
-        self, interaction: discord.Interaction, current: str
-    ) -> list[app_commands.Choice[str]]:
-        return [
-            app_commands.Choice(name=t, value=t)
-            for t in config.TRACKS
-            if current.lower() in t.lower()
-        ][:25]
-
     @submit_manual.autocomplete("track")
     async def _track_ac(self, interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
         return [

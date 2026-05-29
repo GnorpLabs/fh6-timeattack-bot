@@ -50,7 +50,8 @@ def _migrate_time_entries_if_needed(conn: sqlite3.Connection) -> None:
                 submitted_at     TEXT    NOT NULL,
                 source           TEXT    NOT NULL DEFAULT 'manual',
                 raw_telemetry    TEXT,
-                global_rank      INTEGER
+                global_rank      INTEGER,
+                rank_top_pct     REAL
             )
         """)
         return
@@ -72,7 +73,8 @@ def _migrate_time_entries_if_needed(conn: sqlite3.Connection) -> None:
                 submitted_at     TEXT    NOT NULL,
                 source           TEXT    NOT NULL DEFAULT 'manual',
                 raw_telemetry    TEXT,
-                global_rank      INTEGER
+                global_rank      INTEGER,
+                rank_top_pct     REAL
             )
         """)
         conn.execute("""
@@ -85,10 +87,13 @@ def _migrate_time_entries_if_needed(conn: sqlite3.Connection) -> None:
         """)
         conn.execute("DROP TABLE time_entries")
         conn.execute("ALTER TABLE time_entries_v2 RENAME TO time_entries")
-        return  # global_rank already included in v2 CREATE TABLE
+        return  # global_rank and rank_top_pct already included in v2 CREATE TABLE
 
     if "global_rank" not in cols:
         conn.execute("ALTER TABLE time_entries ADD COLUMN global_rank INTEGER")
+
+    if "rank_top_pct" not in cols:
+        conn.execute("ALTER TABLE time_entries ADD COLUMN rank_top_pct REAL")
 
 
 _TOKEN_EXPIRY_DAYS = 30
@@ -142,6 +147,7 @@ def add_entry(
     source: str = "manual",
     raw_telemetry: str | None = None,
     global_rank: int | None = None,
+    rank_top_pct: float | None = None,
 ) -> int:
     submitted_at = datetime.now(timezone.utc).isoformat()
     conn = _connect()
@@ -150,10 +156,12 @@ def add_entry(
             cur = conn.execute(
                 """INSERT INTO time_entries
                    (discord_id, username, track, vehicle, class, lap_time_ms,
-                    screenshot_path, submitted_at, source, raw_telemetry, global_rank)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    screenshot_path, submitted_at, source, raw_telemetry, global_rank,
+                    rank_top_pct)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (discord_id, username, track, vehicle, class_, lap_time_ms,
-                 screenshot_path, submitted_at, source, raw_telemetry, global_rank),
+                 screenshot_path, submitted_at, source, raw_telemetry, global_rank,
+                 rank_top_pct),
             )
             return cur.lastrowid
     finally:

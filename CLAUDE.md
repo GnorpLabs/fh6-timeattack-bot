@@ -16,3 +16,9 @@ Branch naming convention:
 - `fix/<description>` — bug fixes
 - `docs/<description>` — documentation only
 - `chore/<description>` — maintenance, deps, tooling
+
+---
+
+## Forza Horizon 6 — UDP Telemetry Spec
+
+Always read `docs/fh6-telemetry-spec.md` before working on any telemetry-related code (packet parsing, field access, struct layout, or UDP listener logic).

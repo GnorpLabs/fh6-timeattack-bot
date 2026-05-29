@@ -265,6 +265,56 @@ def test_add_entry_global_rank_defaults_to_none(fresh_db):
     assert entry["global_rank"] is None
 
 
+def test_add_entry_stores_rank_top_pct(fresh_db):
+    entry_id = database.add_entry(
+        "111", "Alice", "Hokubu Circuit", "2024 Toyota GR86", "X", 37643,
+        rank_top_pct=8.0,
+    )
+    entry = database.get_entry(entry_id)
+    assert entry["rank_top_pct"] == 8.0
+    assert entry["global_rank"] is None
+
+
+def test_add_entry_rank_top_pct_defaults_to_none(fresh_db):
+    entry_id = database.add_entry("111", "Alice", "Hokubu Circuit", "2024 Toyota GR86", "A", 83456)
+    entry = database.get_entry(entry_id)
+    assert entry["rank_top_pct"] is None
+
+
+def test_init_db_migrates_missing_rank_top_pct(tmp_path, monkeypatch):
+    import sqlite3
+    db = tmp_path / "no_pct.db"
+    conn = sqlite3.connect(db)
+    conn.execute("""
+        CREATE TABLE time_entries (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            discord_id TEXT NOT NULL, username TEXT NOT NULL,
+            track TEXT NOT NULL, vehicle TEXT NOT NULL, class TEXT NOT NULL,
+            lap_time_ms INTEGER NOT NULL, screenshot_path TEXT,
+            submitted_at TEXT NOT NULL,
+            source TEXT NOT NULL DEFAULT 'manual', raw_telemetry TEXT,
+            global_rank INTEGER
+        )
+    """)
+    conn.execute(
+        "INSERT INTO time_entries (discord_id, username, track, vehicle, class, "
+        "lap_time_ms, submitted_at) VALUES ('1','Alice','T','V','A',1000,'2026-01-01')"
+    )
+    conn.commit()
+    conn.close()
+
+    monkeypatch.setattr(config, "DB_PATH", db)
+    database.init_db()
+
+    conn = sqlite3.connect(db)
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(time_entries)")}
+    row = conn.execute("SELECT rank_top_pct FROM time_entries WHERE discord_id='1'").fetchone()
+    conn.close()
+
+    assert "rank_top_pct" in cols
+    assert row[0] is None
+
+
 def test_init_db_migrates_missing_global_rank(tmp_path, monkeypatch):
     import sqlite3
     db = tmp_path / "no_rank.db"
