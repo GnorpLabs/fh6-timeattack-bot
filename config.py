@@ -1,3 +1,4 @@
+import json
 import os
 from pathlib import Path
 
@@ -133,7 +134,8 @@ TRACKS: set[str] = {track for _, tracks in TRACK_GROUPS for track in tracks}
 
 CLASSES: list[str] = ["D", "C", "B", "A", "S1", "S2", "R", "X"]
 
-VEHICLES: list[dict] = []
+_VEHICLES_PATH = Path(__file__).parent / "data" / "vehicles.json"
+VEHICLES: list[dict] = json.loads(_VEHICLES_PATH.read_text()) if _VEHICLES_PATH.exists() else []
 
 
 def get_vehicle_names() -> list[str]:

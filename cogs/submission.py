@@ -421,10 +421,11 @@ class SubmissionCog(commands.Cog):
 
     @submit_manual.autocomplete("vehicle")
     async def _vehicle_ac(self, interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
+        q = current.lower()
         return [
-            app_commands.Choice(name=v["name"], value=v["name"])
+            app_commands.Choice(name=f"{v['manufacturer']} · {v['name']}", value=v["name"])
             for v in config.VEHICLES
-            if current.lower() in v["name"].lower() or current.lower() in v["manufacturer"].lower()
+            if q in v["name"].lower() or q in v["manufacturer"].lower()
         ][:25]
 
 
