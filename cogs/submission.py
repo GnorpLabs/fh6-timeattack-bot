@@ -402,11 +402,14 @@ class SubmissionCog(commands.Cog):
     @submit.autocomplete("track")
     @submit_manual.autocomplete("track")
     async def _track_ac(self, interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
-        return [
-            app_commands.Choice(name=t, value=t)
-            for t in config.TRACKS
-            if current.lower() in t.lower()
-        ][:25]
+        q = current.lower()
+        choices = []
+        for group, tracks in config.TRACK_GROUPS:
+            for track in tracks:
+                display = f"{group} · {track}"
+                if q in display.lower():
+                    choices.append(app_commands.Choice(name=display, value=track))
+        return choices[:25]
 
     @submit_manual.autocomplete("class_")
     async def _class_ac(self, interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
