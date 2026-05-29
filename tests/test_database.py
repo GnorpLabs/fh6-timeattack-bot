@@ -271,7 +271,7 @@ def test_add_entry_stores_rank_top_pct(fresh_db):
         rank_top_pct=8.0,
     )
     entry = database.get_entry(entry_id)
-    assert entry["rank_top_pct"] == 8.0
+    assert entry["rank_top_pct"] == pytest.approx(8.0)
     assert entry["global_rank"] is None
 
 

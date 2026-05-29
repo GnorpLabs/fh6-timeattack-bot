@@ -106,24 +106,24 @@ def test_parse_rank_missing_returns_none():
 def test_parse_rank_top_pct_integer():
     result = _parse_fields("1:23.456 Class A Top 3%", _VEHICLES)
     assert result.global_rank is None
-    assert result.rank_top_pct == 3.0
+    assert result.rank_top_pct == pytest.approx(3.0)
 
 
 def test_parse_rank_top_pct_decimal():
     result = _parse_fields("1:23.456 Class A Top 12.5%", _VEHICLES)
     assert result.global_rank is None
-    assert result.rank_top_pct == 12.5
+    assert result.rank_top_pct == pytest.approx(12.5)
 
 
 def test_parse_rank_top_pct_case_insensitive():
     result = _parse_fields("1:23.456 Class A TOP 1%", _VEHICLES)
-    assert result.rank_top_pct == 1.0
+    assert result.rank_top_pct == pytest.approx(1.0)
 
 
 def test_parse_rank_top_pct_takes_priority_over_hash():
     # "Top X%" should win even if a bare # appears elsewhere in text
     result = _parse_fields("Top 5% Player #99 1:23.456", _VEHICLES)
-    assert result.rank_top_pct == 5.0
+    assert result.rank_top_pct == pytest.approx(5.0)
     assert result.global_rank is None
 
 
@@ -181,7 +181,7 @@ def test_parse_rank_ordinal_rd():
 def test_parse_rank_top_pct_beats_ordinal():
     # "Top X%" should still win even when an ordinal also appears
     result = _parse_fields("Top 3% Player 1st 1:23.456", _VEHICLES)
-    assert result.rank_top_pct == 3.0
+    assert result.rank_top_pct == pytest.approx(3.0)
     assert result.global_rank is None
 
 
@@ -246,7 +246,7 @@ def test_ta2_vehicle():
 def test_tatop_rank_top_pct():
     r = _parse_fields(_TATOP_OCR, _TA_VEHICLES)
     assert r.global_rank is None
-    assert r.rank_top_pct == 3.0
+    assert r.rank_top_pct == pytest.approx(3.0)
 
 
 def test_tatop_vehicle():
@@ -293,7 +293,7 @@ def test_normalize_asterisk_is_x_class():
     result = _parse_fields("| * Class Leaderboard\n00:37.643\nTop 8%\n#32 SKYLINE", _VEHICLES)
     assert result.class_ == "X"
     assert result.time_str == "00:37.643"
-    assert result.rank_top_pct == 8.0
+    assert result.rank_top_pct == pytest.approx(8.0)
 
 
 def test_normalize_ciass_to_class():
@@ -356,7 +356,7 @@ def test_ta7_time():
 
 
 def test_ta7_rank():
-    assert _parse_fields(_TA7_OCR, _TA_VEHICLES2).rank_top_pct == 8.0
+    assert _parse_fields(_TA7_OCR, _TA_VEHICLES2).rank_top_pct == pytest.approx(8.0)
 
 
 def test_ta8_class():
@@ -404,7 +404,7 @@ def test_ta15_time():
 
 
 def test_ta15_rank():
-    assert _parse_fields(_TA15_OCR, _TA_VEHICLES2).rank_top_pct == 43.0
+    assert _parse_fields(_TA15_OCR, _TA_VEHICLES2).rank_top_pct == pytest.approx(43.0)
 
 
 def test_extract_from_image_delegates_to_parse_fields(monkeypatch):
