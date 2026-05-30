@@ -9,34 +9,29 @@ jobs:
   # ── 1. Run relay unit tests ────────────────────────────────────────────────
   test:
     name: Relay unit tests
-    runs-on: self-hosted
-    container:
-      # python:3.11-slim is public and gives us pip. Checkout runs as root
-      # inside the container, so it is never blocked by root-owned workspace
-      # files. The build job (running on the host) owns the ownership cleanup.
-      image: python:3.11-slim
+    runs-on: ubuntu-latest
     permissions:
       contents: read
-      packages: read
 
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
-      - name: Install test dependencies
-        working-directory: fh6-relay
-        run: pip install aiohttp pytest pytest-asyncio
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '20'
 
-      - name: Run tests
+      - name: Install dependencies
         working-directory: fh6-relay
-        run: pytest -v
+        run: npm ci
 
-  # ── 2. Build Windows .exe via Nuitka on native Windows, publish Release ────
+      - name: Run Jest tests
+        working-directory: fh6-relay
+        run: npm test
+
+  # ── 2. Build Windows installer via electron-builder, publish Release ────
   build-and-release:
     name: Build exe & publish release
     needs: test
-    # GitHub-hosted Windows runner: native compilation, no Wine, no Docker.
-    # Nuitka compiles Python → C → real Windows binary, which avoids the
-    # PyInstaller self-extraction behaviour that triggers AV heuristics.
     runs-on: windows-latest
     permissions:
       contents: write
@@ -44,34 +39,23 @@ jobs:
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
-      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
-          python-version: '3.11'
+          node-version: '20'
 
-      - name: Install build dependencies
+      - name: Install dependencies
         working-directory: fh6-relay
-        run: pip install aiohttp pystray Pillow nuitka ordered-set zstandard
+        run: npm ci
 
-      - name: Build fh6-relay.exe with Nuitka
+      - name: Build TypeScript + package with electron-builder
         working-directory: fh6-relay
-        run: |
-          python -m nuitka `
-            --standalone `
-            --windows-console-mode=disable `
-            --enable-plugin=tk-inter `
-            --include-package=pystray `
-            --include-package=PIL `
-            --assume-yes-for-downloads `
-            --output-filename=fh6-relay `
-            --output-dir=dist `
-            main.py
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: npm run dist
 
-      - name: Verify exe was produced
+      - name: Verify installer was produced
         shell: bash
-        run: test -f fh6-relay/dist/main.dist/fh6-relay.exe
-
-      - name: Zip dist folder for release
-        run: Compress-Archive -Path fh6-relay/dist/main.dist/* -DestinationPath fh6-relay/dist/fh6-relay.zip
+        run: ls fh6-relay/release/*.exe
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
@@ -80,15 +64,15 @@ jobs:
           body: |
             ## fh6-relay ${{ github.ref_name }}
 
-            Windows tray app for auto-submitting FH6 lap times via Data Out telemetry.
+            Windows desktop app for capturing and auto-submitting FH6 lap times via Data Out telemetry.
 
             ### Setup
             1. Run `/dataout-register` in Discord to get your token.
-            2. Download `fh6-relay.zip` below and extract it to a folder.
-            3. Run `fh6-relay.exe` from that folder.
-            4. Fill in the first-launch setup dialog (server address, Discord User ID, username, token).
+            2. Download `FH6.Relay.Setup.*.exe` below and run the installer.
+            3. Launch **FH6 Relay** from the Start Menu or Desktop shortcut.
+            4. Open the Settings tab and fill in your server address, Discord User ID, username, and token.
             5. Configure FH6 Data Out → `127.0.0.1:20440`.
 
             See the [README](https://github.com/${{ github.repository }}#data-out-auto-submit) for full instructions.
-          files: fh6-relay/dist/fh6-relay.zip
+          files: fh6-relay/release/*.exe
           generate_release_notes: false
