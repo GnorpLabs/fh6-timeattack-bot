@@ -5,7 +5,7 @@
   "author": "GnorpLabs",
   "main": "dist/main/index.js",
   "scripts": {
-    "build": "tsc -p tsconfig.main.json && tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && tsc -p tsconfig.main.json",
     "start": "npm run build && electron .",
     "test": "jest",
     "pack": "npm run build && electron-builder --win --dir",
