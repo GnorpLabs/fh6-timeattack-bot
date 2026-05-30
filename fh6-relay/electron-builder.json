@@ -4,8 +4,7 @@
   "directories": { "output": "release" },
   "files": ["dist/**/*", "src/renderer/index.html", "src/renderer/styles/**"],
   "win": {
-    "target": "nsis",
-    "arch": ["x64"]
+    "target": [{ "target": "nsis", "arch": ["x64"] }]
   },
   "nsis": {
     "oneClick": false,

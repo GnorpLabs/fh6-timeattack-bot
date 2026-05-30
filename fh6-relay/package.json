@@ -2,6 +2,7 @@
   "name": "fh6-relay",
   "version": "2.0.0",
   "description": "FH6 telemetry relay — Electron desktop app",
+  "author": "GnorpLabs",
   "main": "dist/main/index.js",
   "scripts": {
     "build": "tsc -p tsconfig.main.json && tsc -p tsconfig.json",
