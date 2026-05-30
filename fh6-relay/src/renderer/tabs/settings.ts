@@ -70,7 +70,11 @@ export function initSettingsTab(container: HTMLElement): void {
       udpPort:         Number(fields.udpPort.value) || 20440,
       retentionDays:   Number(fields.retentionDays.value) || 30,
     };
-    await window.ipc.invoke(window.ipc.IPC['CONFIG_SET'], config);
-    status.textContent = 'Saved. Restart the app for UDP port changes to take effect.';
+    try {
+      await window.ipc.invoke(window.ipc.IPC['CONFIG_SET'], config);
+      status.textContent = 'Saved. Restart the app for UDP port changes to take effect.';
+    } catch (e) {
+      status.textContent = `Save failed: ${e}`;
+    }
   });
 }
