@@ -1,0 +1,44 @@
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: #0f0f0f;
+  color: #e0e0e0;
+  font-family: system-ui, sans-serif;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+}
+
+#tab-bar {
+  display: flex;
+  background: #1a1a1a;
+  border-bottom: 1px solid #333;
+  padding: 0 1rem;
+  gap: 0.25rem;
+  flex-shrink: 0;
+}
+
+.tab-btn {
+  background: none;
+  border: none;
+  color: #999;
+  padding: 0.75rem 1.25rem;
+  cursor: pointer;
+  font-size: 0.9rem;
+  border-bottom: 2px solid transparent;
+  transition: color 0.15s, border-color 0.15s;
+}
+.tab-btn:hover { color: #e0e0e0; }
+.tab-btn.active { color: #3b9dff; border-bottom-color: #3b9dff; }
+
+#tab-content { flex: 1; overflow: hidden; position: relative; }
+
+.tab-pane {
+  display: none;
+  position: absolute;
+  inset: 0;
+  padding: 1rem;
+  overflow-y: auto;
+}
+.tab-pane.active { display: block; }
