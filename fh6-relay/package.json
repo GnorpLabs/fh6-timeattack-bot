@@ -1,6 +1,6 @@
 {
   "name": "fh6-relay",
-  "version": "2.0.1",
+  "version": "2.0.2",
   "description": "FH6 telemetry relay — Electron desktop app",
   "author": "GnorpLabs",
   "main": "dist/main/index.js",
