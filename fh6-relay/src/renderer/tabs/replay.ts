@@ -1,239 +1,212 @@
-import { ColumnarLap, Frame } from '../../shared/types';
+import { ColumnarLap } from '../../shared/types';
+import { ChartManager } from '../charts/chartManager';
 import { TrackMap } from '../charts/trackMap';
-
-function formatTime(ms: number): string {
-  const mins = Math.floor(ms / 60000);
-  const secs = ((ms % 60000) / 1000).toFixed(3).padStart(6, '0');
-  return `${mins}:${secs}`;
-}
 
 export function initReplayTab(container: HTMLElement): void {
   container.innerHTML = `
-    <div style="display:flex;flex-direction:column;gap:1rem;height:100%">
-      <div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap">
-        <span id="replay-title" style="font-size:1rem;color:#888">No replay loaded</span>
-        <button id="replay-play"  style="padding:0.3rem 0.9rem;background:#3b9dff;color:#fff;border:none;cursor:pointer;border-radius:4px" disabled>Play</button>
-        <button id="replay-pause" style="padding:0.3rem 0.9rem;background:#333;color:#e0e0e0;border:none;cursor:pointer;border-radius:4px" disabled>Pause</button>
-        <input id="replay-scrub" type="range" min="0" value="0" style="flex:1;min-width:120px" disabled />
-        <span id="replay-time" style="font-size:0.85rem;color:#aaa">0:00.000</span>
+    <div style="display:flex;flex-direction:column;height:100%;overflow:hidden">
+
+      <div style="padding:0.5rem 0;display:flex;gap:0.5rem;align-items:center;flex-shrink:0">
+        <label style="font-size:0.9rem;color:#aaa">Viewing:</label>
+        <select id="replay-lap-select"
+          style="padding:0.3rem 0.6rem;background:#1a1a1a;color:#e0e0e0;border:1px solid #333;border-radius:4px">
+          <option value="">—</option>
+        </select>
+        <span id="replay-lap-info" style="color:#666;font-size:0.85rem"></span>
       </div>
 
-      <div style="display:grid;grid-template-columns:1fr 1fr;grid-template-rows:auto auto;gap:1rem;flex:1">
-        <div style="grid-row:1/3">
-          <canvas id="replay-map" width="500" height="500" style="width:100%;background:#111;border-radius:4px"></canvas>
-        </div>
+      <div id="replay-charts-panel" style="flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:1rem;padding-bottom:80px">
+        <canvas id="replay-map" width="600" height="280"
+          style="width:100%;background:#111;border-radius:4px;max-height:280px"></canvas>
 
-        <div style="display:flex;gap:1rem;align-items:center;flex-wrap:wrap">
-          <div>Speed: <span id="replay-speed" style="font-size:2rem;font-weight:bold">0</span> km/h</div>
-          <div>Gear: <span id="replay-gear" style="font-size:2rem;font-weight:bold">N</span></div>
-          <div>RPM: <span id="replay-rpm">0</span></div>
+        <div class="chart-wrap"><canvas id="chart-elevation"></canvas></div>
+        <div class="chart-wrap"><canvas id="chart-speed"></canvas></div>
+        <div class="chart-wrap"><canvas id="chart-inputs"></canvas></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+          <div class="chart-wrap"><canvas id="chart-gear"></canvas></div>
+          <div class="chart-wrap"><canvas id="chart-rpm"></canvas></div>
         </div>
+        <div class="chart-wrap"><canvas id="chart-boost"></canvas></div>
+        <div class="chart-wrap"><canvas id="chart-tire-temp"></canvas></div>
+        <div class="chart-wrap"><canvas id="chart-tire-slip"></canvas></div>
+        <div class="chart-wrap"><canvas id="chart-suspension"></canvas></div>
+      </div>
 
-        <div style="display:flex;flex-direction:column;gap:0.5rem">
-          <label>Throttle <progress id="replay-bar-throttle" max="255" value="0" style="width:100%"></progress></label>
-          <label>Brake    <progress id="replay-bar-brake"    max="255" value="0" style="width:100%"></progress></label>
-          <label>Clutch   <progress id="replay-bar-clutch"   max="255" value="0" style="width:100%"></progress></label>
-          <label>Steer    <span id="replay-steer">0</span></label>
+      <div id="replay-playback-bar" style="
+        position:fixed;bottom:0;left:0;right:0;
+        background:#1a1a1a;border-top:1px solid #333;
+        padding:0.5rem 1rem;display:flex;flex-direction:column;gap:0.3rem;
+        z-index:100
+      ">
+        <div style="display:flex;gap:1rem;align-items:center;font-size:0.85rem;color:#aaa">
+          <span id="playhead-readout">Speed: — | Gear: — | Throttle: — | Brake: — | Steer: —</span>
+          <span id="playhead-time" style="margin-left:auto;font-variant-numeric:tabular-nums">0:00.000</span>
+        </div>
+        <div style="display:flex;gap:0.75rem;align-items:center">
+          <button id="btn-play-pause" style="padding:0.3rem 0.8rem;background:#333;color:#e0e0e0;border:none;cursor:pointer;border-radius:4px;min-width:60px">Play</button>
+          <select id="speed-select" style="padding:0.3rem;background:#1a1a1a;color:#e0e0e0;border:1px solid #333;border-radius:4px">
+            <option value="0.25">0.25×</option>
+            <option value="0.5">0.5×</option>
+            <option value="1" selected>1×</option>
+            <option value="2">2×</option>
+            <option value="4">4×</option>
+          </select>
+          <input type="range" id="timeline-scrubber" min="0" max="100" value="0"
+            style="flex:1;accent-color:#3b9dff" />
         </div>
       </div>
     </div>
   `;
 
-  const map       = new TrackMap(document.getElementById('replay-map') as HTMLCanvasElement);
-  const titleEl   = document.getElementById('replay-title')!;
-  const playBtn   = document.getElementById('replay-play')  as HTMLButtonElement;
-  const pauseBtn  = document.getElementById('replay-pause') as HTMLButtonElement;
-  const scrub     = document.getElementById('replay-scrub') as HTMLInputElement;
-  const timeEl    = document.getElementById('replay-time')!;
+  const style = document.createElement('style');
+  style.textContent = `.chart-wrap { height: 160px; position: relative; background: #111; border-radius: 4px; padding: 4px; }`;
+  document.head.appendChild(style);
 
-  let frames: Frame[] = [];
-  let frameIndex = 0;
+  const chartManager = new ChartManager();
+  const trackMap = new TrackMap(document.getElementById('replay-map') as HTMLCanvasElement);
+
+  chartManager.createAll();
+
+  let currentData: ColumnarLap | null = null;
+  let lapList: Array<{ lapNumber: number; lapTimeMs: number }> = [];
   let playing = false;
-  let rafId: number | null = null;
-  let lastRealTs = 0;
-  let playheadMs = 0;
+  let rafHandle: number | null = null;
+  let playheadIndex = 0;
+  let lastTimestamp = 0;
 
-  // ---- helpers -------------------------------------------------------
+  const lapSelect = document.getElementById('replay-lap-select') as HTMLSelectElement;
+  const lapInfo = document.getElementById('replay-lap-info')!;
+  const scrubber = document.getElementById('timeline-scrubber') as HTMLInputElement;
+  const playPauseBtn = document.getElementById('btn-play-pause')!;
+  const speedSelect = document.getElementById('speed-select') as HTMLSelectElement;
 
-  function clampIdx(i: number): number {
-    return Math.max(0, Math.min(i, frames.length - 1));
+  function formatMs(ms: number): string {
+    const mins = Math.floor(ms / 60000);
+    const secs = ((ms % 60000) / 1000).toFixed(3).padStart(6, '0');
+    return `${mins}:${secs}`;
   }
 
-  function renderFrame(f: Frame): void {
-    (document.getElementById('replay-speed')!).textContent    = Math.round(f.speed * 3.6).toString();
-    (document.getElementById('replay-gear')!).textContent     = f.gear === 0 ? 'R' : String(f.gear);
-    (document.getElementById('replay-rpm')!).textContent      = Math.round(f.rpm).toString();
-    (document.getElementById('replay-bar-throttle') as HTMLProgressElement).value = f.throttle as unknown as number;
-    (document.getElementById('replay-bar-brake')    as HTMLProgressElement).value = f.brake    as unknown as number;
-    (document.getElementById('replay-bar-clutch')   as HTMLProgressElement).value = f.clutch   as unknown as number;
-    (document.getElementById('replay-steer')!).textContent    = f.steer.toString();
+  function stopPlayback(): void {
+    playing = false;
+    playPauseBtn.textContent = 'Play';
+    if (rafHandle !== null) { cancelAnimationFrame(rafHandle); rafHandle = null; }
   }
 
-  /** Redraw map trail up to frameIndex and update dot/scrub/time. */
-  function redrawMap(): void {
-    const trail = frames.slice(0, frameIndex + 1);
-    map.loadPoints(trail.map(f => f.posX), trail.map(f => f.posZ));
-    if (trail.length >= 2) map.drawLine();
-    map.drawDotAtLast();
+  function setPlayheadAt(index: number): void {
+    if (!currentData) return;
+    const f = currentData.fields;
+    const i = Math.max(0, Math.min(index, currentData.frameCount - 1));
+
+    const speed = Math.round((f.speed[i] ?? 0) * 3.6);
+    const gear = f.gear[i] ?? 0;
+    const throttle = Math.round(((f.throttle[i] ?? 0) / 255) * 100);
+    const brake = Math.round(((f.brake[i] ?? 0) / 255) * 100);
+    const steer = f.steer[i] ?? 0;
+    document.getElementById('playhead-readout')!.textContent =
+      `Speed: ${speed} km/h | Gear: ${gear === 0 ? 'R' : gear} | Throttle: ${throttle}% | Brake: ${brake}% | Steer: ${steer}`;
+
+    const t = f.t[i] ?? 0;
+    document.getElementById('playhead-time')!.textContent = formatMs(t * 1000);
+
+    scrubber.value = String(i);
+    chartManager.redrawAll();
+    chartManager.setPlayhead(i);
+
+    trackMap.drawLine();
+    trackMap.drawDotAtIndex(i);
   }
 
-  function seekTo(idx: number): void {
-    frameIndex  = clampIdx(idx);
-    playheadMs  = frames.length > 0 ? frames[frameIndex].t * 1000 : 0;
-    scrub.value = String(frameIndex);
-    timeEl.textContent = formatTime(playheadMs);
-    if (frames.length > 0) {
-      renderFrame(frames[frameIndex]);
-      redrawMap();
-    }
+  async function loadLap(lapNumber: number): Promise<void> {
+    const ipcChannel = lapNumber === -1
+      ? window.ipc.IPC['GET_FULL_RACE']
+      : window.ipc.IPC['GET_LAP'];
+    const data = await window.ipc.invoke(ipcChannel, lapNumber) as ColumnarLap | null;
+    if (!data) { lapInfo.textContent = 'No data'; return; }
+
+    currentData = data;
+    scrubber.max = String(data.frameCount - 1);
+    scrubber.value = '0';
+    lapInfo.textContent = `${data.frameCount} frames · ${formatMs(data.lapTimeMs)}`;
+
+    chartManager.load(data);
+    trackMap.reset();
+    trackMap.loadPoints(data.fields.posX, data.fields.posZ);
+    trackMap.drawLine();
+    trackMap.drawDotAtIndex(0);
+
+    playheadIndex = 0;
+    setPlayheadAt(0);
+    stopPlayback();
   }
 
-  // ---- playback loop -------------------------------------------------
+  function tick(timestamp: number): void {
+    if (!playing || !currentData) return;
 
-  function tick(realTs: number): void {
-    if (!playing) return;
-    const delta = realTs - lastRealTs;
-    lastRealTs  = realTs;
-    playheadMs += delta;
+    const elapsed = timestamp - lastTimestamp;
+    lastTimestamp = timestamp;
 
-    while (frameIndex < frames.length - 1 && frames[frameIndex + 1].t * 1000 <= playheadMs) {
-      frameIndex++;
-    }
+    const speed = Number(speedSelect.value);
+    const framesToAdvance = (elapsed * speed) / (1000 / 120);
+    playheadIndex = Math.min(
+      Math.floor(playheadIndex + framesToAdvance),
+      currentData.frameCount - 1,
+    );
 
-    renderFrame(frames[frameIndex]);
-    // Only rebuild trail on map every ~8 frames to avoid thrashing
-    if (frameIndex % 8 === 0 || frameIndex === frames.length - 1) {
-      redrawMap();
-    } else {
-      map.drawDotAtIndex(frameIndex);
-    }
-    scrub.value        = String(frameIndex);
-    timeEl.textContent = formatTime(playheadMs);
+    setPlayheadAt(playheadIndex);
 
-    if (frameIndex >= frames.length - 1) {
-      playing = false;
-      playBtn.disabled  = false;
-      pauseBtn.disabled = true;
+    if (playheadIndex >= currentData.frameCount - 1) {
+      stopPlayback();
       return;
     }
 
-    rafId = requestAnimationFrame(tick);
+    rafHandle = requestAnimationFrame(tick);
   }
 
   function startPlayback(): void {
-    if (frames.length === 0) return;
-    playing    = true;
-    lastRealTs = performance.now();
-    playBtn.disabled  = true;
-    pauseBtn.disabled = false;
-    rafId = requestAnimationFrame(tick);
+    if (!currentData) return;
+    playing = true;
+    playPauseBtn.textContent = 'Pause';
+    lastTimestamp = performance.now();
+    rafHandle = requestAnimationFrame(tick);
   }
 
-  function pausePlayback(): void {
-    playing = false;
-    if (rafId !== null) { cancelAnimationFrame(rafId); rafId = null; }
-    playBtn.disabled  = false;
-    pauseBtn.disabled = true;
+  function rebuildLapSelect(): void {
+    const prev = lapSelect.value;
+    lapSelect.innerHTML =
+      '<option value="-1">Full Race</option>' +
+      lapList.map(l => `<option value="${l.lapNumber}">Lap ${l.lapNumber} — ${formatMs(l.lapTimeMs)}</option>`).join('');
+    lapSelect.value = prev || '-1';
   }
 
-  // ---- data loading --------------------------------------------------
+  lapSelect.addEventListener('change', () => loadLap(Number(lapSelect.value)));
 
-  function loadColumnarLap(lap: ColumnarLap): void {
-    pausePlayback();
-    frames = [];
-    map.reset();
-
-    const n = lap.frameCount;
-    for (let i = 0; i < n; i++) {
-      frames.push({
-        t:                lap.fields.t[i],
-        posX:             lap.fields.posX[i],
-        posY:             lap.fields.posY[i],
-        posZ:             lap.fields.posZ[i],
-        speed:            lap.fields.speed[i],
-        rpm:              lap.fields.rpm[i],
-        gear:             lap.fields.gear[i],
-        throttle:         lap.fields.throttle[i],
-        brake:            lap.fields.brake[i],
-        clutch:           lap.fields.clutch[i],
-        handbrake:        lap.fields.handbrake[i],
-        steer:            lap.fields.steer[i],
-        tireTempFL:       lap.fields.tireTempFL[i],
-        tireTempFR:       lap.fields.tireTempFR[i],
-        tireTempRL:       lap.fields.tireTempRL[i],
-        tireTempRR:       lap.fields.tireTempRR[i],
-        tireSlipFL:       lap.fields.tireSlipFL[i],
-        tireSlipFR:       lap.fields.tireSlipFR[i],
-        tireSlipRL:       lap.fields.tireSlipRL[i],
-        tireSlipRR:       lap.fields.tireSlipRR[i],
-        suspFL:           lap.fields.suspFL[i],
-        suspFR:           lap.fields.suspFR[i],
-        suspRL:           lap.fields.suspRL[i],
-        suspRR:           lap.fields.suspRR[i],
-        boost:            lap.fields.boost[i],
-        distanceTraveled: lap.fields.distanceTraveled[i],
-        carOrdinal:       lap.fields.carOrdinal[i],
-        carClass:         lap.fields.carClass[i],
-      });
-    }
-
-    frameIndex        = 0;
-    playheadMs        = 0;
-    scrub.max         = String(Math.max(0, n - 1));
-    scrub.value       = '0';
-    scrub.disabled    = n === 0;
-    playBtn.disabled  = n === 0;
-    pauseBtn.disabled = true;
-    timeEl.textContent = formatTime(0);
-
-    if (n > 0) {
-      renderFrame(frames[0]);
-      // Pre-load all points so the full outline is visible at rest
-      map.loadPoints(frames.map(f => f.posX), frames.map(f => f.posZ));
-      if (n >= 2) map.drawLine();
-      map.drawDotAtIndex(0);
-    }
-  }
-
-  async function openReplay(lapNumber: number): Promise<void> {
-    titleEl.textContent = lapNumber === -1 ? 'Loading full race…' : `Loading lap ${lapNumber}…`;
-    playBtn.disabled  = true;
-    scrub.disabled    = true;
-
-    try {
-      const channel = lapNumber === -1
-        ? window.ipc.IPC['GET_FULL_RACE']
-        : window.ipc.IPC['GET_LAP'];
-      const result  = lapNumber === -1
-        ? await window.ipc.invoke(channel)
-        : await window.ipc.invoke(channel, lapNumber);
-      const lap = result as ColumnarLap;
-      loadColumnarLap(lap);
-      titleEl.textContent = lapNumber === -1
-        ? `Full race — ${formatTime(lap.lapTimeMs)}`
-        : `Lap ${lap.lapNumber} — ${formatTime(lap.lapTimeMs)}`;
-    } catch (e) {
-      titleEl.textContent   = `Failed to load replay: ${e}`;
-      playBtn.disabled  = true;
-    }
-  }
-
-  // ---- controls ------------------------------------------------------
-
-  playBtn.addEventListener('click', () => {
-    if (frameIndex >= frames.length - 1) seekTo(0);
-    startPlayback();
+  scrubber.addEventListener('input', () => {
+    stopPlayback();
+    setPlayheadAt(Number(scrubber.value));
   });
 
-  pauseBtn.addEventListener('click', pausePlayback);
+  playPauseBtn.addEventListener('click', () => {
+    if (playing) {
+      stopPlayback();
+    } else {
+      if (currentData && playheadIndex >= currentData.frameCount - 1) {
+        playheadIndex = 0;
+        setPlayheadAt(0);
+      }
+      startPlayback();
+    }
+  });
 
-  scrub.addEventListener('input', () => {
-    pausePlayback();
-    seekTo(Number(scrub.value));
+  window.ipc.on(window.ipc.IPC['LAP_COMPLETE'], (record: unknown) => {
+    const lap = record as { lapNumber: number; lapTimeMs: number };
+    lapList.push(lap);
+    rebuildLapSelect();
   });
 
   window.addEventListener('open-replay', (e: Event) => {
-    const detail = (e as CustomEvent<{ lapNumber: number }>).detail;
-    void openReplay(detail.lapNumber);
+    const { lapNumber } = (e as CustomEvent).detail as { lapNumber: number };
+    rebuildLapSelect();
+    lapSelect.value = String(lapNumber);
+    loadLap(lapNumber);
   });
 }
