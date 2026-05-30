@@ -1,10 +1,5 @@
 import { LapRecord } from '../../shared/types';
-
-function formatTime(ms: number): string {
-  const mins = Math.floor(ms / 60000);
-  const secs = ((ms % 60000) / 1000).toFixed(3).padStart(6, '0');
-  return `${mins}:${secs}`;
-}
+import { formatLapTime } from '../utils';
 
 export function initSessionTab(container: HTMLElement): void {
   container.innerHTML = `
@@ -70,7 +65,7 @@ export function initSessionTab(container: HTMLElement): void {
       return `
         <tr style="border-bottom:1px solid #222;${isBest ? 'color:#3b9dff' : ''}">
           <td style="padding:0.5rem">${lap.lapNumber}</td>
-          <td style="padding:0.5rem">${formatTime(lap.lapTimeMs)}</td>
+          <td style="padding:0.5rem">${formatLapTime(lap.lapTimeMs)}</td>
           <td style="padding:0.5rem;display:flex;gap:0.5rem">
             <button class="btn-replay" data-lap="${lap.lapNumber}"
               style="padding:0.3rem 0.7rem;background:#333;color:#e0e0e0;border:none;cursor:pointer;border-radius:4px">

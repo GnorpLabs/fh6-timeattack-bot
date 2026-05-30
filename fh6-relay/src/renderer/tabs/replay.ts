@@ -1,6 +1,7 @@
 import { ColumnarLap } from '../../shared/types';
 import { ChartManager } from '../charts/chartManager';
 import { TrackMap } from '../charts/trackMap';
+import { formatLapTime } from '../utils';
 
 export function initReplayTab(container: HTMLElement): void {
   container.innerHTML = `
@@ -80,12 +81,6 @@ export function initReplayTab(container: HTMLElement): void {
   const playPauseBtn = document.getElementById('btn-play-pause')!;
   const speedSelect = document.getElementById('speed-select') as HTMLSelectElement;
 
-  function formatMs(ms: number): string {
-    const mins = Math.floor(ms / 60000);
-    const secs = ((ms % 60000) / 1000).toFixed(3).padStart(6, '0');
-    return `${mins}:${secs}`;
-  }
-
   function stopPlayback(): void {
     playing = false;
     playPauseBtn.textContent = 'Play';
@@ -106,7 +101,7 @@ export function initReplayTab(container: HTMLElement): void {
       `Speed: ${speed} km/h | Gear: ${gear === 0 ? 'R' : gear} | Throttle: ${throttle}% | Brake: ${brake}% | Steer: ${steer}`;
 
     const t = f.t[i] ?? 0;
-    document.getElementById('playhead-time')!.textContent = formatMs(t * 1000);
+    document.getElementById('playhead-time')!.textContent = formatLapTime(t * 1000);
 
     scrubber.value = String(i);
     chartManager.redrawAll();
@@ -126,7 +121,7 @@ export function initReplayTab(container: HTMLElement): void {
     currentData = data;
     scrubber.max = String(data.frameCount - 1);
     scrubber.value = '0';
-    lapInfo.textContent = `${data.frameCount} frames · ${formatMs(data.lapTimeMs)}`;
+    lapInfo.textContent = `${data.frameCount} frames · ${formatLapTime(data.lapTimeMs)}`;
 
     chartManager.load(data);
     trackMap.reset();
@@ -174,7 +169,7 @@ export function initReplayTab(container: HTMLElement): void {
     const prev = lapSelect.value;
     lapSelect.innerHTML =
       '<option value="-1">Full Race</option>' +
-      lapList.map(l => `<option value="${l.lapNumber}">Lap ${l.lapNumber} — ${formatMs(l.lapTimeMs)}</option>`).join('');
+      lapList.map(l => `<option value="${l.lapNumber}">Lap ${l.lapNumber} — ${formatLapTime(l.lapTimeMs)}</option>`).join('');
     lapSelect.value = prev || '-1';
   }
 
