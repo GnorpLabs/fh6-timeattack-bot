@@ -37,7 +37,7 @@ export function registerIpcHandlers(
 
   ipcMain.handle(IPC.CONFIG_GET, () => tokenStore.load());
 
-  ipcMain.handle(IPC.CONFIG_SET, (_e, config: Config) => {
+  ipcMain.handle(IPC.CONFIG_SET, async (_e, config: Config) => {
     tokenStore.save(config);
   });
 }

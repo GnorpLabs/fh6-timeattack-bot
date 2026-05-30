@@ -31,6 +31,12 @@ export class UdpListener {
       this.onFrame(frame);
     });
 
+    this.socket.on('error', (err) => {
+      console.error('[udpListener] socket error:', err.message);
+      this.socket?.close();
+      this.socket = null;
+    });
+
     this.socket.bind(port, '127.0.0.1');
   }
 

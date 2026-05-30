@@ -22,7 +22,15 @@ document.querySelectorAll<HTMLButtonElement>('.tab-btn').forEach(btn => {
   });
 });
 
-initLiveTab(document.getElementById('tab-live')!);
-initSessionTab(document.getElementById('tab-session')!);
-initReplayTab(document.getElementById('tab-replay')!);
-initSettingsTab(document.getElementById('tab-settings')!);
+function safeInit(name: string, fn: () => void): void {
+  try {
+    fn();
+  } catch (e) {
+    console.error(`[fh6-relay] ${name} tab init failed:`, e);
+  }
+}
+
+safeInit('live',     () => initLiveTab(document.getElementById('tab-live')!));
+safeInit('session',  () => initSessionTab(document.getElementById('tab-session')!));
+safeInit('replay',   () => initReplayTab(document.getElementById('tab-replay')!));
+safeInit('settings', () => initSettingsTab(document.getElementById('tab-settings')!));

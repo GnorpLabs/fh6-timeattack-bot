@@ -1,4 +1,5 @@
 import * as fs from 'fs';
+import * as path from 'path';
 import { Config } from '../shared/types';
 
 const DEFAULTS: Config = {
@@ -23,6 +24,7 @@ export class TokenStore {
   }
 
   save(config: Config): void {
+    fs.mkdirSync(path.dirname(this.configPath), { recursive: true });
     fs.writeFileSync(this.configPath, JSON.stringify(config, null, 2));
   }
 }

@@ -66,8 +66,6 @@ export function initReplayTab(container: HTMLElement): void {
   const chartManager = new ChartManager();
   const trackMap = new TrackMap(document.getElementById('replay-map') as HTMLCanvasElement);
 
-  chartManager.createAll();
-
   let currentData: ColumnarLap | null = null;
   let lapList: Array<{ lapNumber: number; lapTimeMs: number }> = [];
   let playing = false;
@@ -123,6 +121,7 @@ export function initReplayTab(container: HTMLElement): void {
     scrubber.value = '0';
     lapInfo.textContent = `${data.frameCount} frames · ${formatLapTime(data.lapTimeMs)}`;
 
+    if (!chartManager.isCreated()) chartManager.createAll();
     chartManager.load(data);
     trackMap.reset();
     trackMap.loadPoints(data.fields.posX, data.fields.posZ);
