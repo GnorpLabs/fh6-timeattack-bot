@@ -9,26 +9,24 @@ jobs:
   # ── 1. Run relay unit tests ────────────────────────────────────────────────
   test:
     name: Relay unit tests
-    runs-on: self-hosted
-    container:
-      # python:3.11-slim is public and gives us pip. Checkout runs as root
-      # inside the container, so it is never blocked by root-owned workspace
-      # files. The build job (running on the host) owns the ownership cleanup.
-      image: python:3.11-slim
+    runs-on: ubuntu-latest
     permissions:
       contents: read
-      packages: read
 
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
-      - name: Install test dependencies
-        working-directory: fh6-relay
-        run: pip install aiohttp pytest pytest-asyncio
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '20'
 
-      - name: Run tests
+      - name: Install dependencies
         working-directory: fh6-relay
-        run: pytest -v
+        run: npm ci
+
+      - name: Run Jest tests
+        working-directory: fh6-relay
+        run: npm test
 
   # ── 2. Build Windows .exe via Nuitka on native Windows, publish Release ────
   build-and-release:
