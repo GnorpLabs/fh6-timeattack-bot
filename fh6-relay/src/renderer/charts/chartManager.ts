@@ -49,6 +49,10 @@ function makeLineChart(
 export class ChartManager {
   private charts: Chart[] = [];
 
+  isCreated(): boolean {
+    return this.charts.length > 0;
+  }
+
   createAll(): void {
     this.charts = [
       makeLineChart('chart-elevation', 'Elevation', '#4ecdc4', 'Y (m)'),
